@@ -65,7 +65,7 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
               <span className="text-rust">Keluar</span>
             </th>
             <th className="text-right py-2.5 px-3 stencil font-semibold w-28">
-              <span className="text-copper">Sisa</span>
+              <span className="text-copper">Jumlah</span>
             </th>
           </tr>
         </thead>

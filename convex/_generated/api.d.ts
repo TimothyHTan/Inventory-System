@@ -10,6 +10,8 @@
 
 import type * as auth from "../auth.js";
 import type * as http from "../http.js";
+import type * as passwordReset from "../passwordReset.js";
+import type * as passwordResetActions from "../passwordResetActions.js";
 import type * as products from "../products.js";
 import type * as transactions from "../transactions.js";
 import type * as users from "../users.js";
@@ -23,6 +25,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   http: typeof http;
+  passwordReset: typeof passwordReset;
+  passwordResetActions: typeof passwordResetActions;
   products: typeof products;
   transactions: typeof transactions;
   users: typeof users;

@@ -64,7 +64,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                 {formatNumber(product.currentStock)}
               </div>
               <div className="stencil mt-0.5" style={{ fontSize: "9px" }}>
-                SISA
+                Sisa
               </div>
             </div>
           </div>
