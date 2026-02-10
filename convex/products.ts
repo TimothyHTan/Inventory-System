@@ -167,3 +167,36 @@ export const remove = mutation({
     await ctx.db.delete(id);
   },
 });
+
+export const bulkRemove = mutation({
+  args: { ids: v.array(v.id("products")) },
+  handler: async (ctx, { ids }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Tidak terautentikasi");
+
+    let deleted = 0;
+
+    for (const id of ids) {
+      const product = await ctx.db.get(id);
+      if (!product) continue;
+
+      if (product.organizationId) {
+        await requireOrgRole(ctx, userId, product.organizationId, ["admin"]);
+      }
+
+      // Remove all transactions for this product
+      const transactions = await ctx.db
+        .query("transactions")
+        .withIndex("by_product", (q) => q.eq("productId", id))
+        .collect();
+      for (const tx of transactions) {
+        await ctx.db.delete(tx._id);
+      }
+
+      await ctx.db.delete(id);
+      deleted++;
+    }
+
+    return { deleted };
+  },
+});

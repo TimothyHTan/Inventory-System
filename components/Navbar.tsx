@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
@@ -9,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { useOrganization } from "@/components/OrganizationProvider";
+import { HamburgerMenu, MobileMenuDropdown } from "@/components/ui/HamburgerMenu";
 
 const roleLabels: Record<string, string> = {
   admin: "Admin",
@@ -21,6 +23,7 @@ export function Navbar() {
   const user = useQuery(api.users.current);
   const { signOut } = useAuthActions();
   const { org, membership } = useOrganization();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const orgSlug = org?.slug;
   const dashboardHref = orgSlug
@@ -36,7 +39,7 @@ export function Navbar() {
     <nav className="sticky top-0 z-30 bg-carbon-900/90 backdrop-blur-md border-b border-carbon-700/40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
-          {/* Left — Logo + Org Switcher + Nav */}
+          {/* Left — Logo + Org Switcher (+ Nav on desktop) */}
           <div className="flex items-center gap-4">
             <Link href={dashboardHref} className="flex items-center gap-2.5">
               {/* Copper diamond icon */}
@@ -48,17 +51,18 @@ export function Navbar() {
               </span>
             </Link>
 
-            <div className="h-4 w-px bg-carbon-700/60 hidden sm:block" />
+            <div className="h-4 w-px bg-carbon-700/60 hidden md:block" />
 
             {/* Org Switcher */}
             {org && (
               <>
                 <OrgSwitcher />
-                <div className="h-4 w-px bg-carbon-700/60 hidden sm:block" />
+                <div className="h-4 w-px bg-carbon-700/60 hidden md:block" />
               </>
             )}
 
-            <div className="flex items-center gap-1">
+            {/* Desktop Nav Links */}
+            <div className="hidden md:flex items-center gap-1">
               <NavLink
                 href={dashboardHref}
                 active={pathname.endsWith("/dashboard")}
@@ -76,21 +80,85 @@ export function Navbar() {
             </div>
           </div>
 
-          {/* Right — User info + status */}
+          {/* Right — User info + status (desktop) / Hamburger (mobile) */}
           <div className="flex items-center gap-3">
-            {/* Connection indicator */}
-            <div className="flex items-center gap-1.5">
-              <span className="status-dot bg-sage animate-pulse-slow" />
-              <span className="text-[10px] text-carbon-400 font-mono hidden sm:block">
-                LIVE
-              </span>
+            {/* Desktop: Connection indicator + User info */}
+            <div className="hidden md:flex items-center gap-3">
+              {/* Connection indicator */}
+              <div className="flex items-center gap-1.5">
+                <span className="status-dot bg-sage animate-pulse-slow" />
+                <span className="text-[10px] text-carbon-400 font-mono">
+                  LIVE
+                </span>
+              </div>
+
+              <div className="h-4 w-px bg-carbon-700/60" />
+
+              {user && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-carbon-300">
+                    {user.name || user.email}
+                  </span>
+                  {membership && (
+                    <Badge
+                      variant={membership.role === "admin" ? "copper" : "muted"}
+                    >
+                      {roleLabels[membership.role] || membership.role}
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              <button
+                onClick={() => void signOut()}
+                className="text-xs text-carbon-400 hover:text-carbon-100 transition-colors px-2 py-1"
+              >
+                Keluar
+              </button>
             </div>
 
-            <div className="h-4 w-px bg-carbon-700/60" />
+            {/* Mobile: Hamburger Menu */}
+            <div className="md:hidden">
+              <HamburgerMenu
+                isOpen={mobileMenuOpen}
+                onToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
-            {user && (
+      {/* Mobile Menu Dropdown */}
+      <MobileMenuDropdown isOpen={mobileMenuOpen}>
+        <div className="max-w-6xl mx-auto px-4 py-4 space-y-3">
+          {/* Nav Links */}
+          <div className="space-y-2">
+            <MobileNavLink
+              href={dashboardHref}
+              active={pathname.endsWith("/dashboard")}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Dashboard
+            </MobileNavLink>
+            {isAdmin && (
+              <MobileNavLink
+                href={settingsHref}
+                active={pathname.endsWith("/settings")}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Pengaturan
+              </MobileNavLink>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="h-px bg-carbon-700/40" />
+
+          {/* User Info */}
+          {user && (
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-carbon-300 hidden sm:block">
+                <span className="text-sm text-carbon-300">
                   {user.name || user.email}
                 </span>
                 {membership && (
@@ -101,17 +169,30 @@ export function Navbar() {
                   </Badge>
                 )}
               </div>
-            )}
+              <div className="flex items-center gap-1.5">
+                <span className="status-dot bg-sage animate-pulse-slow" />
+                <span className="text-[10px] text-carbon-400 font-mono">
+                  LIVE
+                </span>
+              </div>
+            </div>
+          )}
 
-            <button
-              onClick={() => void signOut()}
-              className="text-xs text-carbon-400 hover:text-carbon-100 transition-colors px-2 py-1"
-            >
-              Keluar
-            </button>
-          </div>
+          {/* Divider */}
+          <div className="h-px bg-carbon-700/40" />
+
+          {/* Sign Out */}
+          <button
+            onClick={() => {
+              setMobileMenuOpen(false);
+              void signOut();
+            }}
+            className="w-full text-left text-sm text-carbon-400 hover:text-carbon-100 transition-colors py-2"
+          >
+            Keluar
+          </button>
         </div>
-      </div>
+      </MobileMenuDropdown>
 
       {/* Bottom accent line */}
       <div className="h-px bg-gradient-to-r from-transparent via-copper/20 to-transparent" />
@@ -133,6 +214,33 @@ function NavLink({
       href={href}
       className={cn(
         "px-3 py-1.5 text-xs uppercase tracking-wider rounded-sm transition-colors",
+        active
+          ? "text-copper bg-copper/8"
+          : "text-carbon-300 hover:text-carbon-50 hover:bg-carbon-800/60"
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function MobileNavLink({
+  href,
+  active,
+  children,
+  onClick,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={cn(
+        "block px-4 py-2.5 text-sm uppercase tracking-wider rounded-sm transition-colors",
         active
           ? "text-copper bg-copper/8"
           : "text-carbon-300 hover:text-carbon-50 hover:bg-carbon-800/60"

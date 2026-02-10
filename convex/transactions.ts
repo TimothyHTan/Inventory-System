@@ -136,3 +136,42 @@ export const remove = mutation({
     await ctx.db.delete(id);
   },
 });
+
+export const bulkRemove = mutation({
+  args: { ids: v.array(v.id("transactions")) },
+  handler: async (ctx, { ids }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Tidak terautentikasi");
+
+    let deleted = 0;
+
+    for (const id of ids) {
+      const tx = await ctx.db.get(id);
+      if (!tx) continue;
+
+      // Check org admin permission
+      if (tx.organizationId) {
+        await requireOrgRole(ctx, userId, tx.organizationId, ["admin"]);
+      }
+
+      // Reverse the stock change
+      const product = await ctx.db.get(tx.productId);
+      if (product) {
+        const revertedStock =
+          tx.type === "in"
+            ? product.currentStock - tx.quantity
+            : product.currentStock + tx.quantity;
+
+        await ctx.db.patch(tx.productId, {
+          currentStock: revertedStock,
+          updatedAt: Date.now(),
+        });
+      }
+
+      await ctx.db.delete(id);
+      deleted++;
+    }
+
+    return { deleted };
+  },
+});

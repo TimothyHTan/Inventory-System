@@ -10,16 +10,23 @@ import { SearchBar } from "@/components/SearchBar";
 import { ProductCard } from "@/components/ProductCard";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 
 export default function OrgDashboardPage() {
   const { org, isAdmin, canEdit, isLoading: orgLoading } = useOrganization();
   const [search, setSearch] = useState("");
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const products = useQuery(
     api.products.search,
     org ? { searchQuery: search, organizationId: org._id } : "skip"
   );
+
+  const bulkRemove = useMutation(api.products.bulkRemove);
 
   if (orgLoading) {
     return (
@@ -58,19 +65,74 @@ export default function OrgDashboardPage() {
           </div>
 
           {canEdit && (
-            <Link href={`/org/${org.slug}/products/new`}>
-              <Button size="md">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path
-                    d="M7 2v10M2 7h10"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                Tambah Produk
-              </Button>
-            </Link>
+            <div className="flex gap-2">
+              <AnimatePresence mode="wait">
+                {deleteMode ? (
+                  <motion.div
+                    key="delete-mode"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex gap-2"
+                  >
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      onClick={() => {
+                        setDeleteMode(false);
+                        setSelectedProducts(new Set());
+                      }}
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="md"
+                      disabled={selectedProducts.size === 0}
+                      onClick={() => {
+                        if (selectedProducts.size === 0) return;
+                        setShowConfirmDialog(true);
+                      }}
+                    >
+                      Hapus ({selectedProducts.size})
+                    </Button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="normal-mode"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex gap-2"
+                  >
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        onClick={() => setDeleteMode(true)}
+                      >
+                        Hapus Produk
+                      </Button>
+                    )}
+                    <Link href={`/org/${org.slug}/products/new`}>
+                      <Button size="md">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <path
+                            d="M7 2v10M2 7h10"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        Tambah Produk
+                      </Button>
+                    </Link>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
         </div>
 
@@ -127,6 +189,17 @@ export default function OrgDashboardPage() {
                 product={product}
                 index={index}
                 orgSlug={org.slug}
+                deleteMode={deleteMode}
+                isSelected={selectedProducts.has(product._id)}
+                onToggleSelect={(id) => {
+                  const newSet = new Set(selectedProducts);
+                  if (newSet.has(id)) {
+                    newSet.delete(id);
+                  } else {
+                    newSet.add(id);
+                  }
+                  setSelectedProducts(newSet);
+                }}
               />
             ))}
           </div>
@@ -134,6 +207,31 @@ export default function OrgDashboardPage() {
 
         {/* Migration banner for admin */}
         {isAdmin && org && <MigrationBanner organizationId={org._id} />}
+
+        {/* Confirm Delete Dialog */}
+        <ConfirmDialog
+          open={showConfirmDialog}
+          onClose={() => setShowConfirmDialog(false)}
+          onConfirm={async () => {
+            setIsDeleting(true);
+            try {
+              await bulkRemove({ ids: Array.from(selectedProducts) as Id<"products">[] });
+              setSelectedProducts(new Set());
+              setDeleteMode(false);
+              setShowConfirmDialog(false);
+            } catch (err) {
+              alert(err instanceof Error ? err.message : "Gagal menghapus produk");
+            } finally {
+              setIsDeleting(false);
+            }
+          }}
+          title="Hapus Produk?"
+          message={`Anda akan menghapus ${selectedProducts.size} produk beserta semua transaksinya. Tindakan ini tidak dapat dibatalkan.`}
+          confirmText="Hapus Produk"
+          cancelText="Batal"
+          variant="danger"
+          loading={isDeleting}
+        />
       </main>
     </PageTransition>
   );
