@@ -8,15 +8,20 @@ import { Doc } from "@/convex/_generated/dataModel";
 interface ProductCardProps {
   product: Doc<"products">;
   index?: number;
+  orgSlug?: string;
 }
 
-export function ProductCard({ product, index = 0 }: ProductCardProps) {
+export function ProductCard({ product, index = 0, orgSlug }: ProductCardProps) {
   const stockLevel =
     product.currentStock === 0
       ? "empty"
       : product.currentStock < 100
         ? "low"
         : "normal";
+
+  const href = orgSlug
+    ? `/org/${orgSlug}/products/${product._id}`
+    : `/products/${product._id}`;
 
   return (
     <motion.div
@@ -29,7 +34,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         ease: [0.16, 1, 0.3, 1],
       }}
     >
-      <Link href={`/products/${product._id}`}>
+      <Link href={href}>
         <div className="card card-hover group relative overflow-hidden p-4">
           {/* Left accent stripe */}
           <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-copper/40 group-hover:bg-copper transition-colors" />

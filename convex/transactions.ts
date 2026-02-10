@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { requireOrgRole, getOrgMembership } from "./helpers";
 
 export const list = query({
   args: {
@@ -11,10 +12,21 @@ export const list = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
 
+    // Verify user has access to this product's org
+    const product = await ctx.db.get(productId);
+    if (!product) return [];
+    if (product.organizationId) {
+      const membership = await getOrgMembership(
+        ctx,
+        userId,
+        product.organizationId
+      );
+      if (!membership) return [];
+    }
+
     let transactions;
 
     if (month) {
-      // Use by_product_date index and filter by month prefix
       transactions = await ctx.db
         .query("transactions")
         .withIndex("by_product_date", (q) => q.eq("productId", productId))
@@ -43,12 +55,20 @@ export const add = mutation({
   },
   handler: async (ctx, { productId, type, quantity, description, date }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new Error("Tidak terautentikasi");
 
-    if (quantity <= 0) throw new Error("Quantity must be positive");
+    if (quantity <= 0) throw new Error("Jumlah harus positif");
 
     const product = await ctx.db.get(productId);
-    if (!product) throw new Error("Product not found");
+    if (!product) throw new Error("Produk tidak ditemukan");
+
+    // Check org membership (admin or member can add transactions)
+    if (product.organizationId) {
+      await requireOrgRole(ctx, userId, product.organizationId, [
+        "admin",
+        "member",
+      ]);
+    }
 
     // Prevent negative inventory
     if (type === "out" && quantity > product.currentStock) {
@@ -72,6 +92,7 @@ export const add = mutation({
       runningBalance: newBalance,
       createdAt: Date.now(),
       createdBy: userId,
+      organizationId: product.organizationId,
     });
 
     // Update product stock (atomic — same mutation)
@@ -88,13 +109,15 @@ export const remove = mutation({
   args: { id: v.id("transactions") },
   handler: async (ctx, { id }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
-
-    const user = await ctx.db.get(userId);
-    if (user?.role !== "admin") throw new Error("Admin access required");
+    if (!userId) throw new Error("Tidak terautentikasi");
 
     const tx = await ctx.db.get(id);
-    if (!tx) throw new Error("Transaction not found");
+    if (!tx) throw new Error("Transaksi tidak ditemukan");
+
+    // Check org admin permission
+    if (tx.organizationId) {
+      await requireOrgRole(ctx, userId, tx.organizationId, ["admin"]);
+    }
 
     // Reverse the stock change
     const product = await ctx.db.get(tx.productId);

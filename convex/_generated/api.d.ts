@@ -9,7 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
+import type * as organizations from "../organizations.js";
 import type * as passwordReset from "../passwordReset.js";
 import type * as passwordResetActions from "../passwordResetActions.js";
 import type * as products from "../products.js";
@@ -24,7 +26,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  helpers: typeof helpers;
   http: typeof http;
+  organizations: typeof organizations;
   passwordReset: typeof passwordReset;
   passwordResetActions: typeof passwordResetActions;
   products: typeof products;

@@ -26,7 +26,7 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      router.push("/dashboard");
+      router.push("/");
     }
   }, [isAuthenticated, router]);
 
@@ -42,13 +42,45 @@ export default function LoginPage() {
         name: flow === "signUp" ? name : undefined,
         flow,
       });
-      router.push("/dashboard");
-    } catch {
-      setError(
-        flow === "signIn"
-          ? "Email atau password salah"
-          : "Gagal membuat akun. Coba lagi."
-      );
+      router.push("/");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message.toLowerCase() : "";
+
+      if (flow === "signUp") {
+        if (
+          message.includes("already") ||
+          message.includes("exists") ||
+          message.includes("duplicate") ||
+          message.includes("registered")
+        ) {
+          setError(
+            "Email ini sudah terdaftar. Silakan masuk atau gunakan email lain."
+          );
+        } else if (
+          message.includes("password") &&
+          (message.includes("weak") ||
+            message.includes("short") ||
+            message.includes("min"))
+        ) {
+          setError(
+            "Password terlalu lemah. Gunakan minimal 8 karakter."
+          );
+        } else {
+          setError("Gagal membuat akun. Email mungkin sudah terdaftar.");
+        }
+      } else {
+        if (
+          message.includes("invalid") ||
+          message.includes("credentials") ||
+          message.includes("password") ||
+          message.includes("not found")
+        ) {
+          setError("Email atau password salah. Silakan coba lagi.");
+        } else {
+          setError("Gagal masuk. Periksa email dan password Anda.");
+        }
+      }
     } finally {
       setLoading(false);
     }
