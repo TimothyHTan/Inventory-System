@@ -51,8 +51,14 @@ export default function InboundPage() {
     );
   }
 
+  const shouldRedirect = !orgLoading && (!org || !isLogistic);
+  useEffect(() => {
+    if (shouldRedirect) {
+      router.push(org ? `/org/${org.slug}/dashboard` : "/");
+    }
+  }, [shouldRedirect, org, router]);
+
   if (!org || !isLogistic) {
-    router.push(org ? `/org/${org.slug}/dashboard` : "/");
     return null;
   }
 
@@ -135,7 +141,12 @@ export default function InboundPage() {
                           layout
                           initial={{ opacity: 0, x: -12 }}
                           animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0 }}
+                          exit={{
+                            opacity: 0,
+                            x: 40,
+                            scale: 0.95,
+                            transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+                          }}
                           transition={{
                             duration: 0.2,
                             delay: i * 0.02,
@@ -186,10 +197,11 @@ export default function InboundPage() {
                                   fill="none"
                                 >
                                   <path
-                                    d="M4 4l6 6M10 4l-6 6"
+                                    d="M3 4h8M5.5 4V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M10 4v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4"
                                     stroke="currentColor"
                                     strokeWidth="1.2"
                                     strokeLinecap="round"
+                                    strokeLinejoin="round"
                                   />
                                 </svg>
                               </button>

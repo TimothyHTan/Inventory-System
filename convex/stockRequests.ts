@@ -170,7 +170,7 @@ export const create = mutation({
   },
 });
 
-/** Employee cancels their own pending request */
+/** Cancel a pending request. Own request = any role. Others' requests = logistic+. */
 export const cancel = mutation({
   args: { requestId: v.id("stockRequests") },
   handler: async (ctx, { requestId }) => {
@@ -180,12 +180,13 @@ export const cancel = mutation({
     const request = await ctx.db.get(requestId);
     if (!request) throw new Error("Permintaan tidak ditemukan");
 
-    if (request.requestedBy !== userId) {
-      throw new Error("Anda hanya dapat membatalkan permintaan Anda sendiri");
-    }
-
     if (request.status !== "pending") {
       throw new Error("Hanya permintaan yang menunggu yang dapat dibatalkan");
+    }
+
+    // Own request: anyone can cancel. Others' requests: logistic+ only.
+    if (request.requestedBy !== userId) {
+      await requireMinRole(ctx, userId, request.organizationId, "logistic");
     }
 
     await ctx.db.patch(requestId, { status: "cancelled" });

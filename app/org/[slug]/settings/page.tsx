@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -8,6 +8,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import {
   useOrganization,
   ROLE_LABELS,
+  ROLE_TIER,
   OrgRole,
 } from "@/components/OrganizationProvider";
 import { Button } from "@/components/ui/Button";
@@ -31,8 +32,10 @@ const ALL_ROLES: OrgRole[] = ["employee", "logistic", "manager", "owner", "admin
 
 export default function OrgSettingsPage() {
   const router = useRouter();
-  const { org, isLogistic, isOwner, isAdmin, isLoading: orgLoading } =
+  const { org, membership, isLogistic, isManager, isOwner, isAdmin, isLoading: orgLoading } =
     useOrganization();
+  const currentUserId = membership?.userId;
+  const canManageMembers = isManager; // manager+ can manage lower-tier members
 
   const members = useQuery(
     api.organizations.getMembers,
@@ -69,9 +72,15 @@ export default function OrgSettingsPage() {
     );
   }
 
-  // Redirect employee to dashboard — they should never see settings
-  if (!org || (!isLogistic && !isOwner)) {
-    router.push(org ? `/org/${org.slug}/dashboard` : "/");
+  // Only manager+ can access org settings
+  const shouldRedirect = !orgLoading && (!org || !isManager);
+  useEffect(() => {
+    if (shouldRedirect) {
+      router.push(org ? `/org/${org.slug}/dashboard` : "/");
+    }
+  }, [shouldRedirect, org, router]);
+
+  if (!org || !isManager) {
     return null;
   }
 
@@ -173,10 +182,9 @@ export default function OrgSettingsPage() {
     }
   };
 
-  // Roles visible in the dropdown (admin option only visible to admin users)
-  const assignableRoles = isAdmin
-    ? ALL_ROLES
-    : ALL_ROLES.filter((r) => r !== "admin");
+  // Roles visible in the dropdown — can only assign roles below your own tier
+  const myTier = membership?.role ? (ROLE_TIER[membership.role] ?? 0) : 0;
+  const assignableRoles = ALL_ROLES.filter((r) => ROLE_TIER[r] < myTier);
 
   return (
     <PageTransition>
@@ -361,7 +369,7 @@ export default function OrgSettingsPage() {
                 <th className="text-left py-3 px-5 stencil font-semibold">
                   Role
                 </th>
-                {isOwner && (
+                {canManageMembers && (
                   <th className="text-right py-3 px-5 stencil font-semibold">
                     Aksi
                   </th>
@@ -381,20 +389,24 @@ export default function OrgSettingsPage() {
                     <td className="py-3 px-5">
                       <div className="h-4 bg-carbon-700 rounded w-16 animate-pulse" />
                     </td>
-                    {isOwner && <td className="py-3 px-5" />}
+                    {canManageMembers && <td className="py-3 px-5" />}
                   </tr>
                 ))
               ) : members.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={isOwner ? 4 : 3}
+                    colSpan={canManageMembers ? 4 : 3}
                     className="text-center py-8 text-carbon-400 text-sm"
                   >
                     Tidak ada anggota
                   </td>
                 </tr>
               ) : (
-                members.map((m) => (
+                members.map((m) => {
+                  const isSelf = m.userId === currentUserId;
+                  const memberTier = ROLE_TIER[m.role] ?? 0;
+                  const canManageThis = !isSelf && memberTier < myTier;
+                  return (
                   <motion.tr
                     key={m._id}
                     layout
@@ -410,6 +422,11 @@ export default function OrgSettingsPage() {
                         <span className="truncate">
                           {m.userName || "—"}
                         </span>
+                        {isSelf && (
+                          <span className="text-[10px] text-copper font-medium">
+                            (Anda)
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-5 text-carbon-300 font-mono text-xs hidden sm:table-cell">
@@ -420,8 +437,13 @@ export default function OrgSettingsPage() {
                         {ROLE_LABELS[m.role] || m.role}
                       </Badge>
                     </td>
-                    {isOwner && (
+                    {canManageMembers && (
                       <td className="py-3 px-5 text-right">
+                        {!canManageThis ? (
+                          <span className="text-[10px] text-carbon-500 italic">
+                            {isSelf ? "Anda" : "—"}
+                          </span>
+                        ) : (
                         <div className="flex items-center justify-end gap-2">
                           <select
                             value={m.role}
@@ -459,10 +481,12 @@ export default function OrgSettingsPage() {
                             </svg>
                           </button>
                         </div>
+                        )}
                       </td>
                     )}
                   </motion.tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -538,11 +562,10 @@ export default function OrgSettingsPage() {
                 {invites.map((inv) => (
                   <div
                     key={inv._id}
-                    className={`flex items-center justify-between py-2.5 px-3 rounded-sm border ${
-                      inv.revoked
+                    className={`flex items-center justify-between py-2.5 px-3 rounded-sm border ${inv.revoked
                         ? "border-carbon-700/30 opacity-50"
                         : "border-carbon-600/30 bg-carbon-800/50"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <code className="text-xs font-mono font-semibold text-carbon-100 tracking-wider">
@@ -581,10 +604,6 @@ export default function OrgSettingsPage() {
             INFORMASI ROLE
           </div>
           <div className="space-y-2.5 text-xs text-carbon-400">
-            <p>
-              <Badge variant="rust" className="mr-1.5">Admin</Badge>
-              — semua hak akses Pemilik; akses ke Mode Debug (segera hadir).
-            </p>
             <p>
               <Badge variant="copper" className="mr-1.5">Pemilik</Badge>
               — kendali penuh atas organisasi: kelola anggota, undangan, dan hapus organisasi.

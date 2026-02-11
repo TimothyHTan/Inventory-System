@@ -31,14 +31,14 @@ export function Navbar() {
   const pathname = usePathname();
   const user = useQuery(api.users.current);
   const { signOut } = useAuthActions();
-  const { org, membership, isLogistic, isOwner, isAdmin } = useOrganization();
+  const { org, membership, isLogistic } = useOrganization();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const orgSlug = org?.slug;
   const dashboardHref = orgSlug ? `/org/${orgSlug}/dashboard` : "/dashboard";
-  const settingsHref = orgSlug ? `/org/${orgSlug}/settings` : "/settings";
   const requestsHref = orgSlug ? `/org/${orgSlug}/requests` : "#";
   const inboundHref = orgSlug ? `/org/${orgSlug}/inbound` : "#";
+  const accountHref = orgSlug ? `/org/${orgSlug}/account` : "#";
 
   // Pending request count for notification badge (logistic+ only)
   const pendingCount = useQuery(
@@ -92,14 +92,6 @@ export function Navbar() {
                 Barang Masuk
               </NavLink>
             )}
-            {isOwner && (
-              <NavLink
-                href={settingsHref}
-                active={pathname.endsWith("/settings")}
-              >
-                Pengaturan
-              </NavLink>
-            )}
           </div>
 
           {/* Right — User info (desktop) / Hamburger (mobile) */}
@@ -123,6 +115,30 @@ export function Navbar() {
               )}
 
               <div className="h-4 w-px bg-carbon-700/60" />
+
+              <Link
+                href={accountHref}
+                className={cn(
+                  "p-1.5 rounded-sm transition-colors",
+                  pathname.endsWith("/account")
+                    ? "text-copper bg-copper/8"
+                    : "text-carbon-400 hover:text-carbon-100 hover:bg-carbon-800/60"
+                )}
+                title="Pengaturan"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path
+                    d="M7 8.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  />
+                  <path
+                    d="M11.3 8.5l-.3.6.5 1-.8.8-1-.5-.6.3-.2 1.1h-1.1l-.2-1.1-.6-.3-1 .5-.8-.8.5-1-.3-.6-1.1-.2V7.2l1.1-.2.3-.6-.5-1 .8-.8 1 .5.6-.3.2-1.1h1.1l.2 1.1.6.3 1-.5.8.8-.5 1 .3.6 1.1.2v1.1l-1.1.2z"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  />
+                </svg>
+              </Link>
 
               <button
                 onClick={() => void signOut()}
@@ -170,15 +186,13 @@ export function Navbar() {
                 Barang Masuk
               </MobileNavLink>
             )}
-            {isOwner && (
-              <MobileNavLink
-                href={settingsHref}
-                active={pathname.endsWith("/settings")}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Pengaturan
-              </MobileNavLink>
-            )}
+            <MobileNavLink
+              href={accountHref}
+              active={pathname.endsWith("/account")}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Pengaturan
+            </MobileNavLink>
           </div>
 
           <div className="h-px bg-carbon-700/40" />

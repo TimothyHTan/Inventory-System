@@ -83,7 +83,7 @@ export const create = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
-    await requireMinRole(ctx, userId, organizationId, "logistic");
+    await requireMinRole(ctx, userId, organizationId, "manager");
 
     const now = Date.now();
     const productId = await ctx.db.insert("products", {

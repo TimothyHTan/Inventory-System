@@ -2,22 +2,21 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { useOrganization } from "@/components/OrganizationProvider";
+import { useOrganization, ROLE_LABELS } from "@/components/OrganizationProvider";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
-const roleLabels: Record<string, string> = {
-  admin: "Admin",
-  member: "Anggota",
-  viewer: "Pengamat",
+const roleBadgeVariant: Record<string, "copper" | "sage" | "rust" | "muted"> = {
+  employee: "muted",
+  logistic: "sage",
+  manager: "copper",
+  owner: "copper",
+  admin: "rust",
 };
 
 export function OrgSwitcher() {
-  const { org } = useOrganization();
-  const orgs = useQuery(api.organizations.list);
+  const { org, membership, isManager } = useOrganization();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,6 +44,21 @@ export function OrgSwitcher() {
   }, [open]);
 
   if (!org) return null;
+
+  // If not manager, no dropdown needed — just show org name
+  if (!isManager) {
+    return (
+      <div className="flex items-center gap-2 px-2.5 py-1.5">
+        <div className="w-4 h-4 relative flex-shrink-0">
+          <div className="absolute inset-0 border border-copper/50 rounded-[2px]" />
+          <div className="absolute top-0.5 left-0.5 right-0.5 bottom-0.5 bg-copper/15 rounded-[1px]" />
+        </div>
+        <span className="text-xs text-carbon-100 font-medium max-w-[120px] truncate">
+          {org.name}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="relative" ref={ref}>
@@ -98,81 +112,30 @@ export function OrgSwitcher() {
             transition={{ duration: 0.12, ease: "easeOut" }}
             className="absolute top-full left-0 mt-1.5 w-64 bg-carbon-800 border border-carbon-600/40 rounded-sm shadow-elevated z-50 overflow-hidden"
           >
-            {/* Header */}
-            <div className="px-3 py-2 border-b border-carbon-700/50">
-              <p className="text-[9px] uppercase tracking-[0.2em] text-carbon-400 font-medium">
-                Organisasi
-              </p>
-            </div>
-
-            {/* Org list */}
-            <div className="max-h-48 overflow-y-auto py-1">
-              {orgs?.map((o) => {
-                if (!o) return null;
-                const isActive = o._id === org._id;
-                return (
-                  <button
-                    key={o._id}
-                    onClick={() => {
-                      if (!isActive) {
-                        router.push(`/org/${o.slug}/dashboard`);
-                      }
-                      setOpen(false);
-                    }}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
-                      isActive
-                        ? "bg-copper/8 text-copper"
-                        : "text-carbon-200 hover:bg-carbon-700/50 hover:text-carbon-50"
-                    )}
+            {/* Org info */}
+            <div className="px-3 py-3 border-b border-carbon-700/50">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-carbon-500 font-medium mb-1">
+                    Organisasi
+                  </p>
+                  <p className="text-xs text-carbon-100 font-medium truncate">
+                    {org.name}
+                  </p>
+                </div>
+                {membership && (
+                  <Badge
+                    variant={roleBadgeVariant[membership.role] || "muted"}
+                    className="flex-shrink-0"
                   >
-                    {/* Active indicator */}
-                    <div
-                      className={cn(
-                        "w-1.5 h-1.5 rounded-full flex-shrink-0",
-                        isActive ? "bg-copper" : "bg-carbon-600"
-                      )}
-                    />
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{o.name}</p>
-                    </div>
-
-                    <Badge
-                      variant={o.role === "admin" ? "copper" : "muted"}
-                      className="flex-shrink-0"
-                    >
-                      {roleLabels[o.role] || o.role}
-                    </Badge>
-                  </button>
-                );
-              })}
+                    {ROLE_LABELS[membership.role] || membership.role}
+                  </Badge>
+                )}
+              </div>
             </div>
 
-            {/* Actions */}
-            <div className="border-t border-carbon-700/50 py-1">
-              <button
-                onClick={() => {
-                  router.push("/onboarding");
-                  setOpen(false);
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-carbon-300 hover:text-carbon-50 hover:bg-carbon-700/50 transition-colors"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                >
-                  <path
-                    d="M6 2.5v7M2.5 6h7"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                Buat Organisasi Baru
-              </button>
+            {/* Org settings */}
+            <div className="py-1">
               <button
                 onClick={() => {
                   router.push(`/org/${org.slug}/settings`);

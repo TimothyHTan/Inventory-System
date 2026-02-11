@@ -15,7 +15,7 @@ import { LogisticNotificationBoard } from "@/components/LogisticNotificationBoar
 import Link from "next/link";
 
 export default function OrgDashboardPage() {
-  const { org, isOwner, isLogistic, isLoading: orgLoading } = useOrganization();
+  const { org, isOwner, isManager, isLoading: orgLoading } = useOrganization();
   const [search, setSearch] = useState("");
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
@@ -65,7 +65,7 @@ export default function OrgDashboardPage() {
             </h1>
           </div>
 
-          {(isLogistic || isOwner) && (
+          {(isManager || isOwner) && (
             <div className="flex gap-2">
               <AnimatePresence mode="wait">
                 {deleteMode ? (
@@ -117,7 +117,7 @@ export default function OrgDashboardPage() {
                         Hapus Produk
                       </Button>
                     )}
-                    {isLogistic && (
+                    {isManager && (
                       <Link href={`/org/${org.slug}/products/new`}>
                         <Button size="md">
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

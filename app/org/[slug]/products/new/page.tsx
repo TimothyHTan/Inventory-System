@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation } from "convex/react";
@@ -22,8 +22,14 @@ export default function OrgNewProductPage() {
   const [loading, setLoading] = useState(false);
 
   // Redirect if viewer
+  const shouldRedirect = !orgLoading && !canEdit;
+  useEffect(() => {
+    if (shouldRedirect) {
+      router.push(org ? `/org/${org.slug}/dashboard` : "/");
+    }
+  }, [shouldRedirect, org, router]);
+
   if (!orgLoading && !canEdit) {
-    router.push(org ? `/org/${org.slug}/dashboard` : "/");
     return null;
   }
 

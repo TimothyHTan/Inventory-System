@@ -156,6 +156,15 @@ export const create = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
+    // Single org per user — check if already in an org
+    const existingMemberships = await ctx.db
+      .query("organizationMembers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    if (existingMemberships.length > 0) {
+      throw new Error("Anda sudah terdaftar di sebuah organisasi.");
+    }
+
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Nama organisasi harus diisi");
 
@@ -268,7 +277,7 @@ export const remove = mutation({
   },
 });
 
-/** Update a member's role (owner+ can change, admin role assignable only by admin) */
+/** Update a member's role (manager+ can change roles below their own tier) */
 export const updateMemberRole = mutation({
   args: {
     memberId: v.id("organizationMembers"),
@@ -291,11 +300,24 @@ export const updateMemberRole = mutation({
       ctx,
       userId,
       member.organizationId,
-      "owner"
+      "manager"
     );
 
     if (member.userId === userId) {
       throw new Error("Tidak bisa mengubah role sendiri");
+    }
+
+    const myTier = ROLE_TIER[currentUserMembership.role] ?? 0;
+    const targetTier = ROLE_TIER[member.role] ?? 0;
+
+    // Can only manage members at a lower tier than your own
+    if (targetTier >= myTier) {
+      throw new Error("Tidak bisa mengubah role anggota dengan tier yang sama atau lebih tinggi");
+    }
+
+    // Can only assign roles below your own tier
+    if (ROLE_TIER[role] >= myTier) {
+      throw new Error("Tidak bisa menetapkan role yang sama atau lebih tinggi dari tier Anda");
     }
 
     // Only admin can assign admin role
@@ -328,7 +350,7 @@ export const updateMemberRole = mutation({
   },
 });
 
-/** Remove a member from org (owner+ only, can't remove self) */
+/** Remove a member from org (manager+ only for lower-tier, can't remove self) */
 export const removeMember = mutation({
   args: { memberId: v.id("organizationMembers") },
   handler: async (ctx, { memberId }) => {
@@ -338,10 +360,22 @@ export const removeMember = mutation({
     const member = await ctx.db.get(memberId);
     if (!member) throw new Error("Anggota tidak ditemukan");
 
-    await requireMinRole(ctx, userId, member.organizationId, "owner");
+    const currentUserMembership = await requireMinRole(
+      ctx,
+      userId,
+      member.organizationId,
+      "manager"
+    );
 
     if (member.userId === userId) {
       throw new Error("Tidak bisa menghapus diri sendiri");
+    }
+
+    const myTier = ROLE_TIER[currentUserMembership.role] ?? 0;
+    const targetTier = ROLE_TIER[member.role] ?? 0;
+
+    if (targetTier >= myTier) {
+      throw new Error("Tidak bisa menghapus anggota dengan tier yang sama atau lebih tinggi");
     }
 
     await ctx.db.delete(memberId);
@@ -430,6 +464,15 @@ export const acceptInvite = mutation({
   handler: async (ctx, { code }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
+
+    // Single org per user — check if already in an org
+    const existingMemberships = await ctx.db
+      .query("organizationMembers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    if (existingMemberships.length > 0) {
+      throw new Error("Anda sudah terdaftar di sebuah organisasi.");
+    }
 
     const invite = await ctx.db
       .query("invites")

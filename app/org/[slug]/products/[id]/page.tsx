@@ -287,7 +287,7 @@ export default function OrgProductDetailPage() {
                             strokeLinecap="round"
                           />
                         </svg>
-                        + Catat Masuk
+                        Catat Masuk
                       </Button>
                     )}
                   </motion.div>

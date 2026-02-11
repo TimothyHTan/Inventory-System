@@ -18,7 +18,7 @@ import { timeAgo, formatNumber } from "@/lib/utils";
 type StatusTab = "pending" | "fulfilled" | "cancelled";
 
 export default function RequestsPage() {
-  const { org, membership, isLogistic, isLoading: orgLoading } = useOrganization();
+  const { org, membership, isLogistic, isManager, isLoading: orgLoading } = useOrganization();
   const [activeTab, setActiveTab] = useState<StatusTab>("pending");
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -64,17 +64,19 @@ export default function RequestsPage() {
               Permintaan Stok
             </h1>
           </div>
-          <Button onClick={() => setShowCreateModal(true)} size="md">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M7 2v10M2 7h10"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-            Ajukan Permintaan
-          </Button>
+          {(!isLogistic || isManager) && (
+            <Button onClick={() => setShowCreateModal(true)} size="md">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path
+                  d="M7 2v10M2 7h10"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+              Ajukan Permintaan
+            </Button>
+          )}
         </div>
 
         {/* Status Tabs */}
@@ -169,7 +171,12 @@ function EmployeeRequestList({
               layout
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
+              exit={{
+                opacity: 0,
+                x: 40,
+                scale: 0.95,
+                transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+              }}
               transition={{ duration: 0.2, delay: i * 0.02, ease: [0.16, 1, 0.3, 1] }}
               className="card p-4 flex items-center justify-between gap-3"
             >
@@ -248,9 +255,12 @@ function LogisticRequestList({
   orgId: Id<"organizations">;
 }) {
   const fulfillRequest = useMutation(api.stockRequests.fulfill);
+  const cancelRequest = useMutation(api.stockRequests.cancel);
   const [fulfillId, setFulfillId] = useState<Id<"stockRequests"> | null>(null);
   const [fulfilling, setFulfilling] = useState(false);
   const [fulfillError, setFulfillError] = useState("");
+  const [cancelId, setCancelId] = useState<Id<"stockRequests"> | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   if (requests === undefined) {
     return <LoadingSkeleton />;
@@ -270,7 +280,12 @@ function LogisticRequestList({
               layout
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
+              exit={{
+                opacity: 0,
+                x: 40,
+                scale: 0.95,
+                transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+              }}
               transition={{ duration: 0.2, delay: i * 0.02, ease: [0.16, 1, 0.3, 1] }}
               className="card p-4 flex items-center justify-between gap-3"
             >
@@ -291,15 +306,25 @@ function LogisticRequestList({
                 </div>
               </div>
               {r.status === "pending" && (
-                <Button size="sm" onClick={() => setFulfillId(r._id)}>
-                  Penuhi
-                </Button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCancelId(r._id)}
+                  >
+                    Batalkan
+                  </Button>
+                  <Button size="sm" onClick={() => setFulfillId(r._id)}>
+                    Penuhi
+                  </Button>
+                </div>
               )}
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
 
+      {/* Fulfill confirm */}
       <ConfirmDialog
         open={fulfillId !== null}
         onClose={() => {
@@ -331,6 +356,30 @@ function LogisticRequestList({
         cancelText="Batal"
         variant={fulfillError ? "danger" : "warning"}
         loading={fulfilling}
+      />
+
+      {/* Cancel confirm */}
+      <ConfirmDialog
+        open={cancelId !== null}
+        onClose={() => setCancelId(null)}
+        onConfirm={async () => {
+          if (!cancelId) return;
+          setCancelling(true);
+          try {
+            await cancelRequest({ requestId: cancelId });
+            setCancelId(null);
+          } catch (err) {
+            alert(err instanceof Error ? err.message : "Gagal membatalkan");
+          } finally {
+            setCancelling(false);
+          }
+        }}
+        title="Batalkan Permintaan?"
+        message="Permintaan ini akan dibatalkan. Tindakan ini tidak dapat dikembalikan."
+        confirmText="Batalkan"
+        cancelText="Kembali"
+        variant="warning"
+        loading={cancelling}
       />
     </>
   );

@@ -39,7 +39,7 @@ export default function LoginPage() {
       await signIn("password", {
         email,
         password,
-        name: flow === "signUp" ? name : undefined,
+        ...(flow === "signUp" ? { name } : {}),
         flow,
       });
       router.push("/");
