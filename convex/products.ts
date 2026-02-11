@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { requireOrgRole, getOrgMembership } from "./helpers";
+import { requireMinRole, getOrgMembership } from "./helpers";
 
 export const list = query({
   args: { organizationId: v.id("organizations") },
@@ -83,7 +83,7 @@ export const create = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
-    await requireOrgRole(ctx, userId, organizationId, ["admin", "member"]);
+    await requireMinRole(ctx, userId, organizationId, "logistic");
 
     const now = Date.now();
     const productId = await ctx.db.insert("products", {
@@ -107,6 +107,7 @@ export const create = mutation({
         createdAt: now,
         createdBy: userId,
         organizationId,
+        source: "direct",
       });
     }
 
@@ -128,10 +129,7 @@ export const update = mutation({
     if (!product) throw new Error("Produk tidak ditemukan");
 
     if (product.organizationId) {
-      await requireOrgRole(ctx, userId, product.organizationId, [
-        "admin",
-        "member",
-      ]);
+      await requireMinRole(ctx, userId, product.organizationId, "logistic");
     }
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
@@ -152,7 +150,7 @@ export const remove = mutation({
     if (!product) throw new Error("Produk tidak ditemukan");
 
     if (product.organizationId) {
-      await requireOrgRole(ctx, userId, product.organizationId, ["admin"]);
+      await requireMinRole(ctx, userId, product.organizationId, "owner");
     }
 
     // Remove all transactions for this product
@@ -181,7 +179,7 @@ export const bulkRemove = mutation({
       if (!product) continue;
 
       if (product.organizationId) {
-        await requireOrgRole(ctx, userId, product.organizationId, ["admin"]);
+        await requireMinRole(ctx, userId, product.organizationId, "owner");
       }
 
       // Remove all transactions for this product

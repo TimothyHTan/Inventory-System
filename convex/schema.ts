@@ -32,9 +32,11 @@ export default defineSchema({
     organizationId: v.id("organizations"),
     userId: v.id("users"),
     role: v.union(
-      v.literal("admin"),
-      v.literal("member"),
-      v.literal("viewer")
+      v.literal("employee"),
+      v.literal("logistic"),
+      v.literal("manager"),
+      v.literal("owner"),
+      v.literal("admin")
     ),
     joinedAt: v.number(),
   })
@@ -78,13 +80,41 @@ export default defineSchema({
     quantity: v.number(),
     description: v.string(), // customer/supplier name (KETERANGAN)
     runningBalance: v.number(), // SISA — snapshot at time of transaction
-    createdAt: v.number(),
+    createdAt: v.number(), // system timestamp for 60-min delete window
     createdBy: v.optional(v.id("users")),
     organizationId: v.optional(v.id("organizations")),
+    source: v.optional(
+      v.union(
+        v.literal("direct"), // manually added MASUK by logistic
+        v.literal("request") // auto-created KELUAR from a fulfilled stock request
+      )
+    ),
   })
     .index("by_product", ["productId"])
     .index("by_product_date", ["productId", "date"])
     .index("by_org", ["organizationId"]),
+
+  // ── Stock Requests (KELUAR flow only) ─────────────────────────
+
+  stockRequests: defineTable({
+    organizationId: v.id("organizations"),
+    productId: v.id("products"),
+    requestedBy: v.id("users"),
+    quantity: v.number(),
+    note: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("fulfilled"),
+      v.literal("cancelled")
+    ),
+    fulfilledBy: v.optional(v.id("users")),
+    fulfilledAt: v.optional(v.number()),
+    transactionId: v.optional(v.id("transactions")),
+    createdAt: v.number(),
+  })
+    .index("by_org", ["organizationId"])
+    .index("by_org_status", ["organizationId", "status"])
+    .index("by_requester", ["requestedBy"]),
 
   passwordResetOtps: defineTable({
     email: v.string(),

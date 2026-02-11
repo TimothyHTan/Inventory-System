@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { requireOrgRole, getOrgMembership } from "./helpers";
+import {
+  getOrgMembership,
+  requireMinRole,
+  ROLE_TIER,
+  isWithinDeleteWindow,
+} from "./helpers";
 
 export const list = query({
   args: {
@@ -12,7 +17,6 @@ export const list = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
 
-    // Verify user has access to this product's org
     const product = await ctx.db.get(productId);
     if (!product) return [];
     if (product.organizationId) {
@@ -45,6 +49,45 @@ export const list = query({
   },
 });
 
+// List all MASUK transactions for an organization (for the inbound page)
+export const listInbound = query({
+  args: {
+    organizationId: v.id("organizations"),
+  },
+  handler: async (ctx, { organizationId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const membership = await getOrgMembership(ctx, userId, organizationId);
+    if (!membership || ROLE_TIER[membership.role] < ROLE_TIER["logistic"]) {
+      return [];
+    }
+
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_org", (q) => q.eq("organizationId", organizationId))
+      .order("desc")
+      .collect();
+
+    // Filter to only MASUK (in) transactions, enrich with product names
+    const inbound = transactions.filter((tx) => tx.type === "in");
+
+    const enriched = await Promise.all(
+      inbound.map(async (tx) => {
+        const product = await ctx.db.get(tx.productId);
+        const creator = tx.createdBy ? await ctx.db.get(tx.createdBy) : null;
+        return {
+          ...tx,
+          productName: product?.name ?? "—",
+          creatorName: creator?.name || creator?.email || "—",
+        };
+      })
+    );
+
+    return enriched;
+  },
+});
+
 export const add = mutation({
   args: {
     productId: v.id("products"),
@@ -52,8 +95,15 @@ export const add = mutation({
     quantity: v.number(),
     description: v.string(),
     date: v.string(),
+    // Internal flag — only set by stockRequests.fulfill
+    _internal_source: v.optional(
+      v.union(v.literal("direct"), v.literal("request"))
+    ),
   },
-  handler: async (ctx, { productId, type, quantity, description, date }) => {
+  handler: async (
+    ctx,
+    { productId, type, quantity, description, date, _internal_source }
+  ) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
@@ -62,12 +112,16 @@ export const add = mutation({
     const product = await ctx.db.get(productId);
     if (!product) throw new Error("Produk tidak ditemukan");
 
-    // Check org membership (admin or member can add transactions)
+    // KELUAR transactions can only be created via request fulfillment
+    if (type === "out" && _internal_source !== "request") {
+      throw new Error(
+        "Transaksi KELUAR hanya dapat dibuat melalui pemenuhan permintaan stok."
+      );
+    }
+
+    // Require logistic+ for direct MASUK
     if (product.organizationId) {
-      await requireOrgRole(ctx, userId, product.organizationId, [
-        "admin",
-        "member",
-      ]);
+      await requireMinRole(ctx, userId, product.organizationId, "logistic");
     }
 
     // Prevent negative inventory
@@ -82,8 +136,9 @@ export const add = mutation({
         ? product.currentStock + quantity
         : product.currentStock - quantity;
 
-    // Insert transaction record
-    await ctx.db.insert("transactions", {
+    const source = _internal_source || "direct";
+
+    const txId = await ctx.db.insert("transactions", {
       productId,
       date,
       type,
@@ -93,15 +148,15 @@ export const add = mutation({
       createdAt: Date.now(),
       createdBy: userId,
       organizationId: product.organizationId,
+      source,
     });
 
-    // Update product stock (atomic — same mutation)
     await ctx.db.patch(productId, {
       currentStock: newBalance,
       updatedAt: Date.now(),
     });
 
-    return newBalance;
+    return { newBalance, txId };
   },
 });
 
@@ -114,9 +169,23 @@ export const remove = mutation({
     const tx = await ctx.db.get(id);
     if (!tx) throw new Error("Transaksi tidak ditemukan");
 
-    // Check org admin permission
     if (tx.organizationId) {
-      await requireOrgRole(ctx, userId, tx.organizationId, ["admin"]);
+      const membership = await requireMinRole(
+        ctx,
+        userId,
+        tx.organizationId,
+        "logistic"
+      );
+
+      // Tiered delete: logistic can only delete within 60 minutes
+      if (membership.role === "logistic") {
+        if (!isWithinDeleteWindow(tx.createdAt)) {
+          throw new Error(
+            "Transaksi ini sudah lebih dari 60 menit dan tidak dapat dihapus oleh Staf Logistik."
+          );
+        }
+      }
+      // manager, owner, admin — always allowed (already passed requireMinRole)
     }
 
     // Reverse the stock change
@@ -144,14 +213,27 @@ export const bulkRemove = mutation({
     if (!userId) throw new Error("Tidak terautentikasi");
 
     let deleted = 0;
+    let skipped = 0;
 
     for (const id of ids) {
       const tx = await ctx.db.get(id);
       if (!tx) continue;
 
-      // Check org admin permission
       if (tx.organizationId) {
-        await requireOrgRole(ctx, userId, tx.organizationId, ["admin"]);
+        const membership = await requireMinRole(
+          ctx,
+          userId,
+          tx.organizationId,
+          "logistic"
+        );
+
+        // Logistic: skip transactions outside the 60-min window
+        if (membership.role === "logistic") {
+          if (!isWithinDeleteWindow(tx.createdAt)) {
+            skipped++;
+            continue;
+          }
+        }
       }
 
       // Reverse the stock change
@@ -172,6 +254,6 @@ export const bulkRemove = mutation({
       deleted++;
     }
 
-    return { deleted };
+    return { deleted, skipped };
   },
 });

@@ -5,30 +5,34 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { useOrganization } from "@/components/OrganizationProvider";
+import {
+  useOrganization,
+  ROLE_LABELS,
+  OrgRole,
+} from "@/components/OrganizationProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { motion, AnimatePresence } from "motion/react";
-import { cn } from "@/lib/utils";
 
-const roleLabels: Record<string, string> = {
-  admin: "Admin",
-  member: "Anggota",
-  viewer: "Pengamat",
+// Badge variant per role
+const roleBadgeVariant: Record<string, "copper" | "sage" | "rust" | "muted"> = {
+  employee: "muted",
+  logistic: "sage",
+  manager: "copper",
+  owner: "copper",
+  admin: "rust",
 };
 
-const roleBadgeVariant: Record<string, "copper" | "sage" | "muted"> = {
-  admin: "copper",
-  member: "sage",
-  viewer: "muted",
-};
+// Ordered list of assignable roles (lowest → highest)
+const ALL_ROLES: OrgRole[] = ["employee", "logistic", "manager", "owner", "admin"];
 
 export default function OrgSettingsPage() {
   const router = useRouter();
-  const { org, isAdmin, isLoading: orgLoading } = useOrganization();
+  const { org, isLogistic, isOwner, isAdmin, isLoading: orgLoading } =
+    useOrganization();
 
   const members = useQuery(
     api.organizations.getMembers,
@@ -36,7 +40,7 @@ export default function OrgSettingsPage() {
   );
   const invites = useQuery(
     api.organizations.getInvites,
-    org ? { organizationId: org._id } : "skip"
+    org && isOwner ? { organizationId: org._id } : "skip"
   );
 
   const updateOrg = useMutation(api.organizations.update);
@@ -47,7 +51,6 @@ export default function OrgSettingsPage() {
   const removeOrg = useMutation(api.organizations.remove);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [orgName, setOrgName] = useState("");
   const [nameEditing, setNameEditing] = useState(false);
   const [newName, setNewName] = useState("");
   const [savingName, setSavingName] = useState(false);
@@ -66,7 +69,8 @@ export default function OrgSettingsPage() {
     );
   }
 
-  if (!org || !isAdmin) {
+  // Redirect employee to dashboard — they should never see settings
+  if (!org || (!isLogistic && !isOwner)) {
     router.push(org ? `/org/${org.slug}/dashboard` : "/");
     return null;
   }
@@ -99,7 +103,7 @@ export default function OrgSettingsPage() {
     try {
       const code = await createInvite({ organizationId: org._id });
       setNewInviteCode(code);
-      setTimeout(() => setNewInviteCode(""), 30000); // Clear after 30s
+      setTimeout(() => setNewInviteCode(""), 30000);
     } catch (err) {
       setError(
         err instanceof Error
@@ -130,12 +134,12 @@ export default function OrgSettingsPage() {
 
   const handleRoleChange = async (
     memberId: Id<"organizationMembers">,
-    role: "admin" | "member" | "viewer"
+    role: OrgRole
   ) => {
     setError("");
     try {
       await updateMemberRole({ memberId, role });
-      setSuccess(`Role berhasil diubah menjadi ${roleLabels[role]}`);
+      setSuccess(`Role berhasil diubah menjadi ${ROLE_LABELS[role]}`);
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       const message =
@@ -168,6 +172,11 @@ export default function OrgSettingsPage() {
       }
     }
   };
+
+  // Roles visible in the dropdown (admin option only visible to admin users)
+  const assignableRoles = isAdmin
+    ? ALL_ROLES
+    : ALL_ROLES.filter((r) => r !== "admin");
 
   return (
     <PageTransition>
@@ -277,57 +286,59 @@ export default function OrgSettingsPage() {
           )}
         </AnimatePresence>
 
-        {/* ── Organization Name ─────────────────────────────── */}
-        <section className="card p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-medium text-carbon-50 uppercase tracking-wider">
-              Nama Organisasi
-            </h2>
-          </div>
-
-          {nameEditing ? (
-            <div className="flex gap-3">
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder={org.name}
-                className="flex-1"
-                autoFocus
-              />
-              <Button size="sm" loading={savingName} onClick={handleSaveName}>
-                Simpan
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setNameEditing(false)}
-              >
-                Batal
-              </Button>
+        {/* ── Organization Name (owner+ only) ──────────────────── */}
+        {isOwner && (
+          <section className="card p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-medium text-carbon-50 uppercase tracking-wider">
+                Nama Organisasi
+              </h2>
             </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-carbon-100">{org.name}</p>
-                <p className="text-xs text-carbon-500 font-mono mt-0.5">
-                  /{org.slug}
-                </p>
+
+            {nameEditing ? (
+              <div className="flex gap-3">
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder={org.name}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button size="sm" loading={savingName} onClick={handleSaveName}>
+                  Simpan
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setNameEditing(false)}
+                >
+                  Batal
+                </Button>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setNewName(org.name);
-                  setNameEditing(true);
-                }}
-              >
-                Ubah
-              </Button>
-            </div>
-          )}
-        </section>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-carbon-100">{org.name}</p>
+                  <p className="text-xs text-carbon-500 font-mono mt-0.5">
+                    /{org.slug}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setNewName(org.name);
+                    setNameEditing(true);
+                  }}
+                >
+                  Ubah
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
 
-        {/* ── Members ─────────────────────────────────────── */}
+        {/* ── Members ──────────────────────────────────────────── */}
         <section className="card overflow-hidden mb-6">
           <div className="px-5 py-4 border-b border-carbon-700/50 flex items-center justify-between">
             <h2 className="text-sm font-medium text-carbon-50 uppercase tracking-wider">
@@ -350,9 +361,11 @@ export default function OrgSettingsPage() {
                 <th className="text-left py-3 px-5 stencil font-semibold">
                   Role
                 </th>
-                <th className="text-right py-3 px-5 stencil font-semibold">
-                  Aksi
-                </th>
+                {isOwner && (
+                  <th className="text-right py-3 px-5 stencil font-semibold">
+                    Aksi
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -368,49 +381,46 @@ export default function OrgSettingsPage() {
                     <td className="py-3 px-5">
                       <div className="h-4 bg-carbon-700 rounded w-16 animate-pulse" />
                     </td>
-                    <td className="py-3 px-5" />
+                    {isOwner && <td className="py-3 px-5" />}
                   </tr>
                 ))
               ) : members.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={isOwner ? 4 : 3}
                     className="text-center py-8 text-carbon-400 text-sm"
                   >
                     Tidak ada anggota
                   </td>
                 </tr>
               ) : (
-                members.map((m) => {
-                  const isCurrentOrg =
-                    m.userId === org.createdBy && m.role === "admin";
-                  return (
-                    <motion.tr
-                      key={m._id}
-                      layout
-                      className="ledger-line hover:bg-carbon-800/40 transition-colors"
-                    >
-                      <td className="py-3 px-5 text-carbon-100">
-                        <div className="flex items-center gap-2">
-                          {/* Avatar circle */}
-                          <div className="w-6 h-6 rounded-full bg-carbon-700 flex items-center justify-center text-[10px] font-medium text-carbon-300 flex-shrink-0">
-                            {(m.userName || m.userEmail || "?")
-                              .charAt(0)
-                              .toUpperCase()}
-                          </div>
-                          <span className="truncate">
-                            {m.userName || "—"}
-                          </span>
+                members.map((m) => (
+                  <motion.tr
+                    key={m._id}
+                    layout
+                    className="ledger-line hover:bg-carbon-800/40 transition-colors"
+                  >
+                    <td className="py-3 px-5 text-carbon-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-carbon-700 flex items-center justify-center text-[10px] font-medium text-carbon-300 flex-shrink-0">
+                          {(m.userName || m.userEmail || "?")
+                            .charAt(0)
+                            .toUpperCase()}
                         </div>
-                      </td>
-                      <td className="py-3 px-5 text-carbon-300 font-mono text-xs hidden sm:table-cell">
-                        {m.userEmail || "—"}
-                      </td>
-                      <td className="py-3 px-5">
-                        <Badge variant={roleBadgeVariant[m.role] || "muted"}>
-                          {roleLabels[m.role] || m.role}
-                        </Badge>
-                      </td>
+                        <span className="truncate">
+                          {m.userName || "—"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-5 text-carbon-300 font-mono text-xs hidden sm:table-cell">
+                      {m.userEmail || "—"}
+                    </td>
+                    <td className="py-3 px-5">
+                      <Badge variant={roleBadgeVariant[m.role] || "muted"}>
+                        {ROLE_LABELS[m.role] || m.role}
+                      </Badge>
+                    </td>
+                    {isOwner && (
                       <td className="py-3 px-5 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <select
@@ -418,17 +428,16 @@ export default function OrgSettingsPage() {
                             onChange={(e) =>
                               handleRoleChange(
                                 m._id,
-                                e.target.value as
-                                  | "admin"
-                                  | "member"
-                                  | "viewer"
+                                e.target.value as OrgRole
                               )
                             }
                             className="bg-carbon-800 border border-carbon-600/30 rounded-sm px-2 py-1 text-xs text-carbon-200 focus:outline-none focus:border-copper/40"
                           >
-                            <option value="admin">Admin</option>
-                            <option value="member">Anggota</option>
-                            <option value="viewer">Pengamat</option>
+                            {assignableRoles.map((r) => (
+                              <option key={r} value={r}>
+                                {ROLE_LABELS[r]}
+                              </option>
+                            ))}
                           </select>
                           <button
                             onClick={() => handleRemoveMember(m._id)}
@@ -451,163 +460,187 @@ export default function OrgSettingsPage() {
                           </button>
                         </div>
                       </td>
-                    </motion.tr>
-                  );
-                })
+                    )}
+                  </motion.tr>
+                ))
               )}
             </tbody>
           </table>
         </section>
 
-        {/* ── Invites ─────────────────────────────────────── */}
-        <section className="card p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-medium text-carbon-50 uppercase tracking-wider">
-              Kode Undangan
-            </h2>
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={creatingInvite}
-              onClick={handleCreateInvite}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path
-                  d="M6 2.5v7M2.5 6h7"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                />
-              </svg>
-              Buat Kode
-            </Button>
-          </div>
-
-          {/* Newly created code banner */}
-          <AnimatePresence>
-            {newInviteCode && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-4 overflow-hidden"
+        {/* ── Invites (owner+ only) ─────────────────────────── */}
+        {isOwner && (
+          <section className="card p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-medium text-carbon-50 uppercase tracking-wider">
+                Kode Undangan
+              </h2>
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={creatingInvite}
+                onClick={handleCreateInvite}
               >
-                <div className="bg-sage/8 border border-sage/20 rounded-sm p-4">
-                  <p className="text-xs text-sage mb-2">
-                    Kode undangan baru dibuat:
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <code className="text-lg font-mono font-bold text-sage tracking-[0.15em]">
-                      {newInviteCode}
-                    </code>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        navigator.clipboard.writeText(newInviteCode);
-                      }}
-                    >
-                      Salin
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-carbon-400 mt-2">
-                    Bagikan kode ini kepada orang yang ingin Anda undang.
-                    Mereka bisa bergabung di halaman{" "}
-                    <span className="font-mono text-carbon-300">
-                      /invite/{newInviteCode}
-                    </span>
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M6 2.5v7M2.5 6h7"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                Buat Kode
+              </Button>
+            </div>
 
-          {/* Existing invites */}
-          {invites && invites.length > 0 ? (
-            <div className="space-y-2">
-              {invites.map((inv) => (
-                <div
-                  key={inv._id}
-                  className={cn(
-                    "flex items-center justify-between py-2.5 px-3 rounded-sm border",
-                    inv.revoked
-                      ? "border-carbon-700/30 opacity-50"
-                      : "border-carbon-600/30 bg-carbon-800/50"
-                  )}
+            {/* Newly created code banner */}
+            <AnimatePresence>
+              {newInviteCode && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-4 overflow-hidden"
                 >
-                  <div className="flex items-center gap-3">
-                    <code className="text-xs font-mono font-semibold text-carbon-100 tracking-wider">
-                      {inv.code}
-                    </code>
-                    <span className="text-[10px] text-carbon-500">
-                      {inv.uses} digunakan
-                    </span>
-                    {inv.revoked && (
-                      <Badge variant="rust">Dicabut</Badge>
+                  <div className="bg-sage/8 border border-sage/20 rounded-sm p-4">
+                    <p className="text-xs text-sage mb-2">
+                      Kode undangan baru dibuat:
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <code className="text-lg font-mono font-bold text-sage tracking-[0.15em]">
+                        {newInviteCode}
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          navigator.clipboard.writeText(newInviteCode);
+                        }}
+                      >
+                        Salin
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-carbon-400 mt-2">
+                      Bagikan kode ini kepada orang yang ingin Anda undang.
+                      Mereka bisa bergabung di halaman{" "}
+                      <span className="font-mono text-carbon-300">
+                        /invite/{newInviteCode}
+                      </span>
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Existing invites */}
+            {invites && invites.length > 0 ? (
+              <div className="space-y-2">
+                {invites.map((inv) => (
+                  <div
+                    key={inv._id}
+                    className={`flex items-center justify-between py-2.5 px-3 rounded-sm border ${
+                      inv.revoked
+                        ? "border-carbon-700/30 opacity-50"
+                        : "border-carbon-600/30 bg-carbon-800/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <code className="text-xs font-mono font-semibold text-carbon-100 tracking-wider">
+                        {inv.code}
+                      </code>
+                      <span className="text-[10px] text-carbon-500">
+                        {inv.uses} digunakan
+                      </span>
+                      {inv.revoked && (
+                        <Badge variant="rust">Dicabut</Badge>
+                      )}
+                    </div>
+
+                    {!inv.revoked && (
+                      <button
+                        onClick={() => revokeInvite({ inviteId: inv._id })}
+                        className="text-xs text-carbon-400 hover:text-rust transition-colors"
+                      >
+                        Cabut
+                      </button>
                     )}
                   </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-carbon-500">
+                Belum ada kode undangan. Buat kode untuk mengundang anggota baru.
+              </p>
+            )}
+          </section>
+        )}
 
-                  {!inv.revoked && (
-                    <button
-                      onClick={() => revokeInvite({ inviteId: inv._id })}
-                      className="text-xs text-carbon-400 hover:text-rust transition-colors"
-                    >
-                      Cabut
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-carbon-500">
-              Belum ada kode undangan. Buat kode untuk mengundang anggota baru.
-            </p>
-          )}
-        </section>
-
-        {/* ── Info ─────────────────────────────────────────── */}
+        {/* ── INFORMASI ROLE ─────────────────────────────────── */}
         <section className="card p-5 mb-6">
           <div className="stencil mb-3" style={{ fontSize: "9px" }}>
             INFORMASI ROLE
           </div>
-          <div className="space-y-2 text-xs text-carbon-400">
+          <div className="space-y-2.5 text-xs text-carbon-400">
             <p>
-              <span className="text-copper font-medium">Admin</span> — akses
-              penuh: kelola produk, transaksi, anggota, hapus organisasi.
+              <Badge variant="rust" className="mr-1.5">Admin</Badge>
+              — semua hak akses Pemilik; akses ke Mode Debug (segera hadir).
             </p>
             <p>
-              <span className="text-sage font-medium">Anggota</span> — dapat
-              membuat/edit produk dan menambah transaksi.
+              <Badge variant="copper" className="mr-1.5">Pemilik</Badge>
+              — kendali penuh atas organisasi: kelola anggota, undangan, dan hapus organisasi.
             </p>
             <p>
-              <span className="text-carbon-200 font-medium">Pengamat</span> —
-              hanya dapat melihat data (read-only).
+              <Badge variant="copper" className="mr-1.5">Manajer</Badge>
+              — dapat menghapus transaksi kapan saja tanpa batasan waktu.
+            </p>
+            <p>
+              <Badge variant="sage" className="mr-1.5">Staf Logistik</Badge>
+              — memproses permintaan stok keluar; mencatat barang masuk secara langsung; dapat menghapus transaksi dalam 60 menit pertama.
+            </p>
+            <p>
+              <Badge variant="muted" className="mr-1.5">Karyawan</Badge>
+              — hanya dapat melihat stok dan mengajukan permintaan barang keluar.
             </p>
           </div>
         </section>
 
-        {/* ── Danger Zone ─────────────────────────────────── */}
-        <section className="card border-rust/20 p-5">
-          <div className="stencil mb-3 text-rust" style={{ fontSize: "9px" }}>
-            ZONA BERBAHAYA
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-carbon-100">Hapus Organisasi</p>
-              <p className="text-xs text-carbon-400 mt-0.5">
-                Semua produk, transaksi, dan anggota akan dihapus secara
-                permanen.
-              </p>
+        {/* ── Debug Mode Stub (admin only) ───────────────────── */}
+        {isAdmin && (
+          <section className="card p-5 mb-6 opacity-50">
+            <div className="stencil mb-3" style={{ fontSize: "9px" }}>
+              MODE DEBUG
             </div>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => setShowDeleteModal(true)}
-            >
-              Hapus Organisasi
-            </Button>
-          </div>
-        </section>
+            <p className="text-xs text-carbon-500">
+              {/* TODO: implement debug mode */}
+              Segera hadir — fitur debug dan diagnostik untuk admin.
+            </p>
+          </section>
+        )}
+
+        {/* ── Danger Zone (owner+ only) ──────────────────────── */}
+        {isOwner && (
+          <section className="card border-rust/20 p-5">
+            <div className="stencil mb-3 text-rust" style={{ fontSize: "9px" }}>
+              ZONA BERBAHAYA
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-sm text-carbon-100">Hapus Organisasi</p>
+                <p className="text-xs text-carbon-400 mt-0.5">
+                  Semua produk, transaksi, dan anggota akan dihapus secara
+                  permanen.
+                </p>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setShowDeleteModal(true)}
+              >
+                Hapus Organisasi
+              </Button>
+            </div>
+          </section>
+        )}
 
         {/* Delete confirmation modal */}
         <Modal

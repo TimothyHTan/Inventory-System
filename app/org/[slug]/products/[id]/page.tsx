@@ -20,7 +20,7 @@ import { formatNumber, formatMonth, getMonthString } from "@/lib/utils";
 export default function OrgProductDetailPage() {
   const params = useParams();
   const productId = params.id as Id<"products">;
-  const { org, canEdit } = useOrganization();
+  const { org, isLogistic, isManager, isOwner, membership } = useOrganization();
 
   const [showForm, setShowForm] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState("");
@@ -31,6 +31,8 @@ export default function OrgProductDetailPage() {
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const product = useQuery(api.products.get, { id: productId });
   const transactions = useQuery(api.transactions.list, {
@@ -39,6 +41,7 @@ export default function OrgProductDetailPage() {
   });
 
   const updateProduct = useMutation(api.products.update);
+  const removeTransaction = useMutation(api.transactions.remove);
   const bulkRemoveTransactions = useMutation(api.transactions.bulkRemove);
 
   if (product === undefined) {
@@ -148,7 +151,7 @@ export default function OrgProductDetailPage() {
                   <h1 className="font-display text-3xl text-carbon-50">
                     {product.name}
                   </h1>
-                  {canEdit && (
+                  {isLogistic && (
                     <button
                       onClick={() => {
                         setEditName(product.name);
@@ -222,7 +225,7 @@ export default function OrgProductDetailPage() {
             )}
           </div>
 
-          {canEdit && (
+          {(isLogistic || isManager) && (
             <div className="flex gap-2">
               <AnimatePresence mode="wait">
                 {deleteMode ? (
@@ -265,24 +268,28 @@ export default function OrgProductDetailPage() {
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                     className="flex gap-2"
                   >
-                    <Button
-                      variant="ghost"
-                      size="md"
-                      onClick={() => setDeleteMode(true)}
-                    >
-                      Hapus Transaksi
-                    </Button>
-                    <Button onClick={() => setShowForm(true)} size="md">
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path
-                          d="M7 2v10M2 7h10"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      Tambah Transaksi
-                    </Button>
+                    {isManager && (
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        onClick={() => setDeleteMode(true)}
+                      >
+                        Hapus Transaksi
+                      </Button>
+                    )}
+                    {isLogistic && (
+                      <Button onClick={() => setShowForm(true)} size="md">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <path
+                            d="M7 2v10M2 7h10"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        + Catat Masuk
+                      </Button>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -312,25 +319,29 @@ export default function OrgProductDetailPage() {
                 }
                 setSelectedTransactions(newSet);
               }}
+              userRole={membership?.role}
+              onDeleteSingle={(id) => setSingleDeleteId(id)}
+              deletingId={deletingId}
             />
           )}
         </div>
 
-        {/* Transaction Form Modal */}
+        {/* Transaction Form Modal — MASUK only */}
         <Modal
           open={showForm}
           onClose={() => setShowForm(false)}
-          title="Tambah Transaksi"
+          title="Catat Barang Masuk"
         >
           <TransactionForm
             productId={productId}
             currentStock={product.currentStock}
             onSuccess={() => setShowForm(false)}
             onCancel={() => setShowForm(false)}
+            lockedType="in"
           />
         </Modal>
 
-        {/* Confirm Delete Dialog */}
+        {/* Confirm Bulk Delete Dialog */}
         <ConfirmDialog
           open={showConfirmDialog}
           onClose={() => setShowConfirmDialog(false)}
@@ -353,6 +364,29 @@ export default function OrgProductDetailPage() {
           cancelText="Batal"
           variant="danger"
           loading={isDeleting}
+        />
+
+        {/* Confirm Single Delete Dialog */}
+        <ConfirmDialog
+          open={!!singleDeleteId}
+          onClose={() => setSingleDeleteId(null)}
+          onConfirm={async () => {
+            if (!singleDeleteId) return;
+            setDeletingId(singleDeleteId);
+            setSingleDeleteId(null);
+            try {
+              await removeTransaction({ id: singleDeleteId as Id<"transactions"> });
+            } catch (err) {
+              alert(err instanceof Error ? err.message : "Gagal menghapus transaksi");
+            } finally {
+              setDeletingId(null);
+            }
+          }}
+          title="Hapus Transaksi?"
+          message="Transaksi ini akan dihapus dan stok akan disesuaikan kembali."
+          confirmText="Hapus"
+          cancelText="Batal"
+          variant="danger"
         />
       </main>
     </PageTransition>

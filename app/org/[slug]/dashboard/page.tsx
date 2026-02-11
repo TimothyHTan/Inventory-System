@@ -11,10 +11,11 @@ import { ProductCard } from "@/components/ProductCard";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { LogisticNotificationBoard } from "@/components/LogisticNotificationBoard";
 import Link from "next/link";
 
 export default function OrgDashboardPage() {
-  const { org, isAdmin, canEdit, isLoading: orgLoading } = useOrganization();
+  const { org, isOwner, isLogistic, isLoading: orgLoading } = useOrganization();
   const [search, setSearch] = useState("");
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
@@ -64,7 +65,7 @@ export default function OrgDashboardPage() {
             </h1>
           </div>
 
-          {canEdit && (
+          {(isLogistic || isOwner) && (
             <div className="flex gap-2">
               <AnimatePresence mode="wait">
                 {deleteMode ? (
@@ -107,7 +108,7 @@ export default function OrgDashboardPage() {
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                     className="flex gap-2"
                   >
-                    {isAdmin && (
+                    {isOwner && (
                       <Button
                         variant="ghost"
                         size="md"
@@ -116,19 +117,21 @@ export default function OrgDashboardPage() {
                         Hapus Produk
                       </Button>
                     )}
-                    <Link href={`/org/${org.slug}/products/new`}>
-                      <Button size="md">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                          <path
-                            d="M7 2v10M2 7h10"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                        Tambah Produk
-                      </Button>
-                    </Link>
+                    {isLogistic && (
+                      <Link href={`/org/${org.slug}/products/new`}>
+                        <Button size="md">
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path
+                              d="M7 2v10M2 7h10"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          Tambah Produk
+                        </Button>
+                      </Link>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -205,8 +208,11 @@ export default function OrgDashboardPage() {
           </div>
         )}
 
-        {/* Migration banner for admin */}
-        {isAdmin && org && <MigrationBanner organizationId={org._id} />}
+        {/* Logistic notification board */}
+        {org && <LogisticNotificationBoard />}
+
+        {/* Migration banner for owner+ */}
+        {isOwner && org && <MigrationBanner organizationId={org._id} />}
 
         {/* Confirm Delete Dialog */}
         <ConfirmDialog

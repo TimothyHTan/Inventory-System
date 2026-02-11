@@ -9,40 +9,50 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
-import { useOrganization } from "@/components/OrganizationProvider";
-import { HamburgerMenu, MobileMenuDropdown } from "@/components/ui/HamburgerMenu";
+import {
+  useOrganization,
+  ROLE_LABELS,
+} from "@/components/OrganizationProvider";
+import {
+  HamburgerMenu,
+  MobileMenuDropdown,
+} from "@/components/ui/HamburgerMenu";
 
-const roleLabels: Record<string, string> = {
-  admin: "Admin",
-  member: "Anggota",
-  viewer: "Pengamat",
+// Badge variant per role
+const roleBadgeVariant: Record<string, "copper" | "sage" | "rust" | "muted"> = {
+  employee: "muted",
+  logistic: "sage",
+  manager: "copper",
+  owner: "copper",
+  admin: "rust",
 };
 
 export function Navbar() {
   const pathname = usePathname();
   const user = useQuery(api.users.current);
   const { signOut } = useAuthActions();
-  const { org, membership } = useOrganization();
+  const { org, membership, isLogistic, isOwner, isAdmin } = useOrganization();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const orgSlug = org?.slug;
-  const dashboardHref = orgSlug
-    ? `/org/${orgSlug}/dashboard`
-    : "/dashboard";
-  const settingsHref = orgSlug
-    ? `/org/${orgSlug}/settings`
-    : "/settings";
+  const dashboardHref = orgSlug ? `/org/${orgSlug}/dashboard` : "/dashboard";
+  const settingsHref = orgSlug ? `/org/${orgSlug}/settings` : "/settings";
+  const requestsHref = orgSlug ? `/org/${orgSlug}/requests` : "#";
+  const inboundHref = orgSlug ? `/org/${orgSlug}/inbound` : "#";
 
-  const isAdmin = membership?.role === "admin";
+  // Pending request count for notification badge (logistic+ only)
+  const pendingCount = useQuery(
+    api.stockRequests.pendingCount,
+    org && isLogistic ? { organizationId: org._id } : "skip"
+  );
 
   return (
     <nav className="sticky top-0 z-30 bg-carbon-900/90 backdrop-blur-md border-b border-carbon-700/40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
-          {/* Left — Logo + Org Switcher (+ Nav on desktop) */}
-          <div className="flex items-center gap-4">
+          {/* Left — Logo + Org Switcher */}
+          <div className="flex items-center gap-4 flex-shrink-0">
             <Link href={dashboardHref} className="flex items-center gap-2.5">
-              {/* Copper diamond icon */}
               <div className="w-5 h-5 rotate-45 border-2 border-copper flex items-center justify-center">
                 <div className="w-1.5 h-1.5 bg-copper" />
               </div>
@@ -51,73 +61,77 @@ export function Navbar() {
               </span>
             </Link>
 
-            <div className="h-4 w-px bg-carbon-700/60 hidden md:block" />
-
-            {/* Org Switcher */}
             {org && (
               <>
-                <OrgSwitcher />
                 <div className="h-4 w-px bg-carbon-700/60 hidden md:block" />
+                <OrgSwitcher />
               </>
             )}
-
-            {/* Desktop Nav Links */}
-            <div className="hidden md:flex items-center gap-1">
-              <NavLink
-                href={dashboardHref}
-                active={pathname.endsWith("/dashboard")}
-              >
-                Dashboard
-              </NavLink>
-              {isAdmin && (
-                <NavLink
-                  href={settingsHref}
-                  active={pathname.endsWith("/settings")}
-                >
-                  Pengaturan
-                </NavLink>
-              )}
-            </div>
           </div>
 
-          {/* Right — User info + status (desktop) / Hamburger (mobile) */}
-          <div className="flex items-center gap-3">
-            {/* Desktop: Connection indicator + User info */}
+          {/* Center — Desktop Nav Links */}
+          <div className="hidden md:flex items-center gap-1">
+            <NavLink
+              href={dashboardHref}
+              active={pathname.endsWith("/dashboard")}
+            >
+              Dashboard
+            </NavLink>
+            <NavLink
+              href={requestsHref}
+              active={pathname.endsWith("/requests")}
+              badge={isLogistic && pendingCount ? pendingCount : undefined}
+            >
+              Permintaan Stok
+            </NavLink>
+            {isLogistic && (
+              <NavLink
+                href={inboundHref}
+                active={pathname.endsWith("/inbound")}
+              >
+                Barang Masuk
+              </NavLink>
+            )}
+            {isOwner && (
+              <NavLink
+                href={settingsHref}
+                active={pathname.endsWith("/settings")}
+              >
+                Pengaturan
+              </NavLink>
+            )}
+          </div>
+
+          {/* Right — User info (desktop) / Hamburger (mobile) */}
+          <div className="flex items-center gap-3 flex-shrink-0">
             <div className="hidden md:flex items-center gap-3">
-              {/* Connection indicator */}
-              <div className="flex items-center gap-1.5">
-                <span className="status-dot bg-sage animate-pulse-slow" />
-                <span className="text-[10px] text-carbon-400 font-mono">
-                  LIVE
-                </span>
-              </div>
-
-              <div className="h-4 w-px bg-carbon-700/60" />
-
               {user && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-carbon-300">
+                  <span className="text-xs text-carbon-300 whitespace-nowrap">
                     {user.name || user.email}
                   </span>
                   {membership && (
                     <Badge
-                      variant={membership.role === "admin" ? "copper" : "muted"}
+                      variant={
+                        roleBadgeVariant[membership.role] || "muted"
+                      }
                     >
-                      {roleLabels[membership.role] || membership.role}
+                      {ROLE_LABELS[membership.role] || membership.role}
                     </Badge>
                   )}
                 </div>
               )}
 
+              <div className="h-4 w-px bg-carbon-700/60" />
+
               <button
                 onClick={() => void signOut()}
-                className="text-xs text-carbon-400 hover:text-carbon-100 transition-colors px-2 py-1"
+                className="text-xs text-carbon-400 hover:text-carbon-100 transition-colors px-2 py-1 whitespace-nowrap"
               >
                 Keluar
               </button>
             </div>
 
-            {/* Mobile: Hamburger Menu */}
             <div className="md:hidden">
               <HamburgerMenu
                 isOpen={mobileMenuOpen}
@@ -131,7 +145,6 @@ export function Navbar() {
       {/* Mobile Menu Dropdown */}
       <MobileMenuDropdown isOpen={mobileMenuOpen}>
         <div className="max-w-6xl mx-auto px-4 py-4 space-y-3">
-          {/* Nav Links */}
           <div className="space-y-2">
             <MobileNavLink
               href={dashboardHref}
@@ -140,7 +153,24 @@ export function Navbar() {
             >
               Dashboard
             </MobileNavLink>
-            {isAdmin && (
+            <MobileNavLink
+              href={requestsHref}
+              active={pathname.endsWith("/requests")}
+              onClick={() => setMobileMenuOpen(false)}
+              badge={isLogistic && pendingCount ? pendingCount : undefined}
+            >
+              Permintaan Stok
+            </MobileNavLink>
+            {isLogistic && (
+              <MobileNavLink
+                href={inboundHref}
+                active={pathname.endsWith("/inbound")}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Barang Masuk
+              </MobileNavLink>
+            )}
+            {isOwner && (
               <MobileNavLink
                 href={settingsHref}
                 active={pathname.endsWith("/settings")}
@@ -151,10 +181,8 @@ export function Navbar() {
             )}
           </div>
 
-          {/* Divider */}
           <div className="h-px bg-carbon-700/40" />
 
-          {/* User Info */}
           {user && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -163,25 +191,17 @@ export function Navbar() {
                 </span>
                 {membership && (
                   <Badge
-                    variant={membership.role === "admin" ? "copper" : "muted"}
+                    variant={roleBadgeVariant[membership.role] || "muted"}
                   >
-                    {roleLabels[membership.role] || membership.role}
+                    {ROLE_LABELS[membership.role] || membership.role}
                   </Badge>
                 )}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="status-dot bg-sage animate-pulse-slow" />
-                <span className="text-[10px] text-carbon-400 font-mono">
-                  LIVE
-                </span>
               </div>
             </div>
           )}
 
-          {/* Divider */}
           <div className="h-px bg-carbon-700/40" />
 
-          {/* Sign Out */}
           <button
             onClick={() => {
               setMobileMenuOpen(false);
@@ -194,7 +214,6 @@ export function Navbar() {
         </div>
       </MobileMenuDropdown>
 
-      {/* Bottom accent line */}
       <div className="h-px bg-gradient-to-r from-transparent via-copper/20 to-transparent" />
     </nav>
   );
@@ -204,22 +223,29 @@ function NavLink({
   href,
   active,
   children,
+  badge,
 }: {
   href: string;
   active: boolean;
   children: React.ReactNode;
+  badge?: number;
 }) {
   return (
     <Link
       href={href}
       className={cn(
-        "px-3 py-1.5 text-xs uppercase tracking-wider rounded-sm transition-colors",
+        "relative px-3 py-1.5 text-xs uppercase tracking-wider rounded-sm transition-colors whitespace-nowrap",
         active
           ? "text-copper bg-copper/8"
           : "text-carbon-300 hover:text-carbon-50 hover:bg-carbon-800/60"
       )}
     >
       {children}
+      {badge !== undefined && badge > 0 && (
+        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rust text-[9px] font-bold text-white">
+          {badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -229,24 +255,33 @@ function MobileNavLink({
   active,
   children,
   onClick,
+  badge,
 }: {
   href: string;
   active: boolean;
   children: React.ReactNode;
   onClick?: () => void;
+  badge?: number;
 }) {
   return (
     <Link
       href={href}
       onClick={onClick}
       className={cn(
-        "block px-4 py-2.5 text-sm uppercase tracking-wider rounded-sm transition-colors",
+        "relative block px-4 py-2.5 text-sm uppercase tracking-wider rounded-sm transition-colors",
         active
           ? "text-copper bg-copper/8"
           : "text-carbon-300 hover:text-carbon-50 hover:bg-carbon-800/60"
       )}
     >
-      {children}
+      <span className="flex items-center gap-2">
+        {children}
+        {badge !== undefined && badge > 0 && (
+          <span className="min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rust text-[9px] font-bold text-white">
+            {badge}
+          </span>
+        )}
+      </span>
     </Link>
   );
 }

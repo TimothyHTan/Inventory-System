@@ -14,6 +14,7 @@ interface TransactionFormProps {
   currentStock: number;
   onSuccess: () => void;
   onCancel: () => void;
+  lockedType?: "in" | "out"; // Lock to a single type (hides the toggle)
 }
 
 export function TransactionForm({
@@ -21,8 +22,9 @@ export function TransactionForm({
   currentStock,
   onSuccess,
   onCancel,
+  lockedType,
 }: TransactionFormProps) {
-  const [type, setType] = useState<"in" | "out">("out");
+  const [type, setType] = useState<"in" | "out">(lockedType || "in");
   const [quantity, setQuantity] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(getTodayString());
@@ -113,58 +115,60 @@ export function TransactionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Type Toggle — MASUK / KELUAR */}
-      <div className="space-y-1.5">
-        <label className="block text-xs uppercase tracking-wider text-carbon-300 font-medium">
-          Tipe
-        </label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setType("in")}
-            className={cn(
-              "flex-1 py-2.5 text-sm font-medium rounded-sm border transition-all duration-150",
-              type === "in"
-                ? "bg-sage/12 border-sage/40 text-sage"
-                : "bg-carbon-800 border-carbon-600/30 text-carbon-400 hover:text-carbon-200 hover:border-carbon-500/40"
-            )}
-          >
-            <span className="flex items-center justify-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path
-                  d="M7 2v10M2 7h10"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-              MASUK
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setType("out")}
-            className={cn(
-              "flex-1 py-2.5 text-sm font-medium rounded-sm border transition-all duration-150",
-              type === "out"
-                ? "bg-rust/12 border-rust/40 text-rust"
-                : "bg-carbon-800 border-carbon-600/30 text-carbon-400 hover:text-carbon-200 hover:border-carbon-500/40"
-            )}
-          >
-            <span className="flex items-center justify-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path
-                  d="M2 7h10"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-              KELUAR
-            </span>
-          </button>
+      {/* Type Toggle — only shown when not locked */}
+      {!lockedType && (
+        <div className="space-y-1.5">
+          <label className="block text-xs uppercase tracking-wider text-carbon-300 font-medium">
+            Tipe
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setType("in")}
+              className={cn(
+                "flex-1 py-2.5 text-sm font-medium rounded-sm border transition-all duration-150",
+                type === "in"
+                  ? "bg-sage/12 border-sage/40 text-sage"
+                  : "bg-carbon-800 border-carbon-600/30 text-carbon-400 hover:text-carbon-200 hover:border-carbon-500/40"
+              )}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path
+                    d="M7 2v10M2 7h10"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                MASUK
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setType("out")}
+              className={cn(
+                "flex-1 py-2.5 text-sm font-medium rounded-sm border transition-all duration-150",
+                type === "out"
+                  ? "bg-rust/12 border-rust/40 text-rust"
+                  : "bg-carbon-800 border-carbon-600/30 text-carbon-400 hover:text-carbon-200 hover:border-carbon-500/40"
+              )}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path
+                    d="M2 7h10"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                KELUAR
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Quantity */}
       <Input

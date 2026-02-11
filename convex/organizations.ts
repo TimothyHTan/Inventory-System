@@ -3,7 +3,8 @@ import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   getOrgMembership,
-  requireOrgRole,
+  requireMinRole,
+  ROLE_TIER,
   generateSlug,
   generateInviteCode,
 } from "./helpers";
@@ -84,7 +85,7 @@ export const getMembers = query({
   },
 });
 
-/** List invites for an organization (admin only) */
+/** List invites for an organization (owner+ only) */
 export const getInvites = query({
   args: { organizationId: v.id("organizations") },
   handler: async (ctx, { organizationId }) => {
@@ -92,7 +93,7 @@ export const getInvites = query({
     if (!userId) return [];
 
     const membership = await getOrgMembership(ctx, userId, organizationId);
-    if (!membership || membership.role !== "admin") return [];
+    if (!membership || ROLE_TIER[membership.role] < ROLE_TIER["owner"]) return [];
 
     const invites = await ctx.db
       .query("invites")
@@ -180,11 +181,11 @@ export const create = mutation({
       createdAt: now,
     });
 
-    // Creator becomes admin
+    // Creator becomes owner
     await ctx.db.insert("organizationMembers", {
       organizationId: orgId,
       userId,
-      role: "admin",
+      role: "owner",
       joinedAt: now,
     });
 
@@ -192,7 +193,7 @@ export const create = mutation({
   },
 });
 
-/** Update organization details (admin only) */
+/** Update organization details (owner+ only) */
 export const update = mutation({
   args: {
     organizationId: v.id("organizations"),
@@ -202,7 +203,7 @@ export const update = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
-    await requireOrgRole(ctx, userId, organizationId, ["admin"]);
+    await requireMinRole(ctx, userId, organizationId, "owner");
 
     if (name !== undefined) {
       const trimmedName = name.trim();
@@ -212,14 +213,14 @@ export const update = mutation({
   },
 });
 
-/** Delete organization and all its data (admin only) */
+/** Delete organization and all its data (owner+ only) */
 export const remove = mutation({
   args: { organizationId: v.id("organizations") },
   handler: async (ctx, { organizationId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
-    await requireOrgRole(ctx, userId, organizationId, ["admin"]);
+    await requireMinRole(ctx, userId, organizationId, "owner");
 
     // Delete all org data
     const products = await ctx.db
@@ -254,15 +255,30 @@ export const remove = mutation({
       await ctx.db.delete(inv._id);
     }
 
+    // Delete stock requests
+    const stockRequests = await ctx.db
+      .query("stockRequests")
+      .withIndex("by_org", (q) => q.eq("organizationId", organizationId))
+      .collect();
+    for (const sr of stockRequests) {
+      await ctx.db.delete(sr._id);
+    }
+
     await ctx.db.delete(organizationId);
   },
 });
 
-/** Update a member's role (admin only, can't change own role) */
+/** Update a member's role (owner+ can change, admin role assignable only by admin) */
 export const updateMemberRole = mutation({
   args: {
     memberId: v.id("organizationMembers"),
-    role: v.union(v.literal("admin"), v.literal("member"), v.literal("viewer")),
+    role: v.union(
+      v.literal("employee"),
+      v.literal("logistic"),
+      v.literal("manager"),
+      v.literal("owner"),
+      v.literal("admin")
+    ),
   },
   handler: async (ctx, { memberId, role }) => {
     const userId = await getAuthUserId(ctx);
@@ -271,17 +287,48 @@ export const updateMemberRole = mutation({
     const member = await ctx.db.get(memberId);
     if (!member) throw new Error("Anggota tidak ditemukan");
 
-    await requireOrgRole(ctx, userId, member.organizationId, ["admin"]);
+    const currentUserMembership = await requireMinRole(
+      ctx,
+      userId,
+      member.organizationId,
+      "owner"
+    );
 
     if (member.userId === userId) {
       throw new Error("Tidak bisa mengubah role sendiri");
+    }
+
+    // Only admin can assign admin role
+    if (role === "admin" && currentUserMembership.role !== "admin") {
+      throw new Error("Hanya Admin yang dapat menetapkan role Admin");
+    }
+
+    // Prevent demotion if this is the last owner/admin
+    if (
+      (member.role === "owner" || member.role === "admin") &&
+      ROLE_TIER[role] < ROLE_TIER[member.role]
+    ) {
+      const allMembers = await ctx.db
+        .query("organizationMembers")
+        .withIndex("by_org", (q) =>
+          q.eq("organizationId", member.organizationId)
+        )
+        .collect();
+      const highRoleCount = allMembers.filter(
+        (m) => m.role === "owner" || m.role === "admin"
+      ).length;
+      if (highRoleCount <= 1) {
+        throw new Error(
+          "Tidak bisa menurunkan role — setidaknya harus ada satu Pemilik atau Admin."
+        );
+      }
     }
 
     await ctx.db.patch(memberId, { role });
   },
 });
 
-/** Remove a member from org (admin only, can't remove self) */
+/** Remove a member from org (owner+ only, can't remove self) */
 export const removeMember = mutation({
   args: { memberId: v.id("organizationMembers") },
   handler: async (ctx, { memberId }) => {
@@ -291,7 +338,7 @@ export const removeMember = mutation({
     const member = await ctx.db.get(memberId);
     if (!member) throw new Error("Anggota tidak ditemukan");
 
-    await requireOrgRole(ctx, userId, member.organizationId, ["admin"]);
+    await requireMinRole(ctx, userId, member.organizationId, "owner");
 
     if (member.userId === userId) {
       throw new Error("Tidak bisa menghapus diri sendiri");
@@ -311,16 +358,18 @@ export const leave = mutation({
     const membership = await getOrgMembership(ctx, userId, organizationId);
     if (!membership) throw new Error("Bukan anggota organisasi ini");
 
-    // If admin, check that there's at least one other admin
-    if (membership.role === "admin") {
-      const admins = await ctx.db
+    // If owner or admin, check that there's at least one other owner/admin
+    if (membership.role === "owner" || membership.role === "admin") {
+      const allMembers = await ctx.db
         .query("organizationMembers")
         .withIndex("by_org", (q) => q.eq("organizationId", organizationId))
         .collect();
-      const adminCount = admins.filter((m) => m.role === "admin").length;
-      if (adminCount <= 1) {
+      const highRoleCount = allMembers.filter(
+        (m) => m.role === "owner" || m.role === "admin"
+      ).length;
+      if (highRoleCount <= 1) {
         throw new Error(
-          "Tidak bisa keluar — Anda satu-satunya admin. Angkat admin lain terlebih dahulu."
+          "Tidak bisa keluar — Anda satu-satunya Pemilik/Admin. Angkat Pemilik lain terlebih dahulu."
         );
       }
     }
@@ -331,7 +380,7 @@ export const leave = mutation({
 
 // ── Invite System ────────────────────────────────────────────────
 
-/** Create an invite code (admin only) */
+/** Create an invite code (owner+ only) */
 export const createInvite = mutation({
   args: {
     organizationId: v.id("organizations"),
@@ -341,7 +390,7 @@ export const createInvite = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
-    await requireOrgRole(ctx, userId, organizationId, ["admin"]);
+    await requireMinRole(ctx, userId, organizationId, "owner");
 
     const code = generateInviteCode();
 
@@ -369,7 +418,7 @@ export const revokeInvite = mutation({
     const invite = await ctx.db.get(inviteId);
     if (!invite) throw new Error("Undangan tidak ditemukan");
 
-    await requireOrgRole(ctx, userId, invite.organizationId, ["admin"]);
+    await requireMinRole(ctx, userId, invite.organizationId, "owner");
 
     await ctx.db.patch(inviteId, { revoked: true });
   },
@@ -406,11 +455,11 @@ export const acceptInvite = mutation({
       throw new Error("Anda sudah menjadi anggota organisasi ini");
     }
 
-    // Add as member
+    // Add as employee (lowest tier — owner promotes as needed)
     await ctx.db.insert("organizationMembers", {
       organizationId: invite.organizationId,
       userId,
-      role: "member",
+      role: "employee",
       joinedAt: Date.now(),
     });
 
@@ -449,7 +498,7 @@ export const migrate = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Tidak terautentikasi");
 
-    await requireOrgRole(ctx, userId, organizationId, ["admin"]);
+    await requireMinRole(ctx, userId, organizationId, "owner");
 
     // Find unassigned products and assign them
     const products = await ctx.db
