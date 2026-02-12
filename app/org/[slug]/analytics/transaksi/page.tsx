@@ -29,7 +29,6 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { motion } from "motion/react";
 import Link from "next/link";
 
 export default function TransaksiAnalyticsPage() {
@@ -37,7 +36,7 @@ export default function TransaksiAnalyticsPage() {
   const [dateRange, setDateRange] = useState<DateRange>("30d");
   const { startDate, endDate } = getDateRange(dateRange);
 
-  const { data, isLoading, isRefreshing, lastUpdated, refresh } =
+  const { data, isLoading, isRefreshing, lastUpdated, refresh, error } =
     useAnalyticsQuery(
       api.analytics.getTransactionAnalytics,
       org
@@ -45,6 +44,27 @@ export default function TransaksiAnalyticsPage() {
         : "skip",
       { pollInterval: 5 * 60 * 1000 }
     );
+
+  if (!isLoading && !data) {
+    return (
+      <>
+        <AnalyticsHeader
+          title="Analitik Transaksi"
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          lastUpdated={lastUpdated}
+          isRefreshing={isRefreshing}
+          onRefresh={refresh}
+        />
+        <EmptyState
+          message="Data analitik transaksi belum tersedia"
+          suggestion={
+            error ?? "Periksa koneksi Convex/auth lalu coba refresh halaman."
+          }
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -215,6 +235,7 @@ export default function TransaksiAnalyticsPage() {
                   stroke="#7B9E6B"
                   strokeWidth={2}
                   fill="url(#gradMasuk)"
+                  isAnimationActive={false}
                 />
                 <Area
                   type="monotone"
@@ -222,6 +243,7 @@ export default function TransaksiAnalyticsPage() {
                   stroke="#C75C5C"
                   strokeWidth={2}
                   fill="url(#gradKeluar)"
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -296,6 +318,7 @@ export default function TransaksiAnalyticsPage() {
                     fillOpacity={0.8}
                     radius={[2, 2, 0, 0]}
                     maxBarSize={20}
+                    isAnimationActive={false}
                   />
                   <Bar
                     dataKey="keluarCount"
@@ -303,6 +326,7 @@ export default function TransaksiAnalyticsPage() {
                     fillOpacity={0.8}
                     radius={[2, 2, 0, 0]}
                     maxBarSize={20}
+                    isAnimationActive={false}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -336,18 +360,11 @@ export default function TransaksiAnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.monthlyData.map((m, i) => {
+                  {data.monthlyData.map((m) => {
                     const net = m.masukQty - m.keluarQty;
                     return (
-                      <motion.tr
+                      <tr
                         key={m.month}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{
-                          delay: i * 0.04,
-                          duration: 0.25,
-                          ease: [0.16, 1, 0.3, 1],
-                        }}
                         className="border-b border-carbon-700/30 last:border-0"
                       >
                         <td className="px-5 py-3 text-sm text-carbon-100">
@@ -383,7 +400,7 @@ export default function TransaksiAnalyticsPage() {
                             {formatNumber(net)}
                           </span>
                         </td>
-                      </motion.tr>
+                      </tr>
                     );
                   })}
                 </tbody>
@@ -425,16 +442,9 @@ export default function TransaksiAnalyticsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.recentTransactions.map((tx, i) => (
-                  <motion.tr
+                {data.recentTransactions.map((tx) => (
+                  <tr
                     key={tx._id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{
-                      delay: i * 0.03,
-                      duration: 0.25,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
                     className="border-b border-carbon-700/30 last:border-0"
                   >
                     <td className="px-5 py-3 mono-num text-xs text-carbon-300">
@@ -475,7 +485,7 @@ export default function TransaksiAnalyticsPage() {
                     <td className="px-5 py-3 text-xs text-carbon-400">
                       {tx.creatorName}
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))}
               </tbody>
             </table>

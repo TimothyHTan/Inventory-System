@@ -27,14 +27,13 @@ import {
   CartesianGrid,
   Cell,
 } from "recharts";
-import { motion } from "motion/react";
 
 export default function ProdukAnalyticsPage() {
   const { org } = useOrganization();
   const [dateRange, setDateRange] = useState<DateRange>("30d");
   const { startDate, endDate } = getDateRange(dateRange);
 
-  const { data, isLoading, isRefreshing, lastUpdated, refresh } =
+  const { data, isLoading, isRefreshing, lastUpdated, refresh, error } =
     useAnalyticsQuery(
       api.analytics.getProductAnalytics,
       org
@@ -42,6 +41,27 @@ export default function ProdukAnalyticsPage() {
         : "skip",
       { pollInterval: 10 * 60 * 1000 }
     );
+
+  if (!isLoading && !data) {
+    return (
+      <>
+        <AnalyticsHeader
+          title="Analitik Produk"
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          lastUpdated={lastUpdated}
+          isRefreshing={isRefreshing}
+          onRefresh={refresh}
+        />
+        <EmptyState
+          message="Data analitik produk belum tersedia"
+          suggestion={
+            error ?? "Periksa koneksi Convex/auth lalu coba refresh halaman."
+          }
+        />
+      </>
+    );
+  }
 
   const distributionData = data
     ? [
@@ -194,7 +214,12 @@ export default function ProdukAnalyticsPage() {
                     "",
                   ]}
                 />
-                <Bar dataKey="value" radius={[0, 2, 2, 0]} maxBarSize={24}>
+                <Bar
+                  dataKey="value"
+                  radius={[0, 2, 2, 0]}
+                  maxBarSize={24}
+                  isAnimationActive={false}
+                >
                   {distributionData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.8} />
                   ))}
@@ -232,16 +257,9 @@ export default function ProdukAnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.slowMoving.map((p, i) => (
-                    <motion.tr
+                  {data.slowMoving.map((p) => (
+                    <tr
                       key={p.name}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        delay: i * 0.04,
-                        duration: 0.25,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
                       className="border-b border-carbon-700/30 last:border-0"
                     >
                       <td className="px-5 py-3 text-sm text-carbon-100">
@@ -258,7 +276,7 @@ export default function ProdukAnalyticsPage() {
                       <td className="px-5 py-3 text-right">
                         <Badge variant="muted">Tidak Aktif</Badge>
                       </td>
-                    </motion.tr>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -312,16 +330,9 @@ export default function ProdukAnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.topProductsByStock.map((p, i) => (
-                    <motion.tr
+                  {data.topProductsByStock.map((p) => (
+                    <tr
                       key={p.name}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        delay: i * 0.04,
-                        duration: 0.25,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
                       className="border-b border-carbon-700/30 last:border-0"
                     >
                       <td className="px-5 py-3 text-sm text-carbon-100">
@@ -347,7 +358,7 @@ export default function ProdukAnalyticsPage() {
                               : "Normal"}
                         </Badge>
                       </td>
-                    </motion.tr>
+                    </tr>
                   ))}
                 </tbody>
               </table>
