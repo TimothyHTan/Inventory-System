@@ -119,6 +119,20 @@ export const resetPassword = action({
     if (newPassword.length < 8) {
       throw new Error("Password minimal 8 karakter.");
     }
+    if (newPassword.length > 16) {
+      throw new Error("Password maksimal 16 karakter.");
+    }
+    if (/[^a-zA-Z0-9]/.test(newPassword)) {
+      throw new Error(
+        "Password hanya boleh huruf dan angka, tanpa karakter spesial."
+      );
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      throw new Error("Password harus mengandung minimal 1 huruf kapital.");
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      throw new Error("Password harus mengandung minimal 1 angka.");
+    }
 
     const hashedPassword = await hashPassword(newPassword);
 

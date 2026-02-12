@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { validatePassword } from "@/lib/utils";
 import Link from "next/link";
 
 type Step = "email" | "otp" | "newPassword" | "success";
@@ -193,8 +194,9 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError("");
 
-    if (newPassword.length < 8) {
-      setError("Password minimal 8 karakter.");
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -553,7 +555,7 @@ export default function ForgotPasswordPage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimal 8 karakter"
+                    placeholder="8-16 karakter, huruf & angka"
                     required
                     autoComplete="new-password"
                     autoFocus

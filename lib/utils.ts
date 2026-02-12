@@ -51,6 +51,27 @@ export function formatMonth(monthString: string): string {
   return `${months[parseInt(month) - 1]} ${year}`;
 }
 
+/** Validate password and return specific error message, or null if valid.
+ * Rules: 8–16 chars, letters and numbers only, at least one uppercase, at least one digit. */
+export function validatePassword(password: string): string | null {
+  if (password.length < 8) {
+    return "Password minimal 8 karakter.";
+  }
+  if (password.length > 16) {
+    return "Password maksimal 16 karakter.";
+  }
+  if (/[^a-zA-Z0-9]/.test(password)) {
+    return "Password hanya boleh huruf dan angka, tanpa karakter spesial.";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Password harus mengandung minimal 1 huruf kapital.";
+  }
+  if (!/[0-9]/.test(password)) {
+    return "Password harus mengandung minimal 1 angka.";
+  }
+  return null;
+}
+
 /** Relative time in Indonesian: "2j lalu", "baru saja" */
 export function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);

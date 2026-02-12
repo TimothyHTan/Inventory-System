@@ -6,6 +6,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { validatePassword } from "@/lib/utils";
 import { useEffect } from "react";
 import Link from "next/link";
 
@@ -34,6 +35,15 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    if (flow === "signUp") {
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        setError(passwordError);
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       await signIn("password", {
