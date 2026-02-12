@@ -3,20 +3,34 @@
 /.pnp
 .pnp.js
 /coverage
+
+# build
 /.next/
 /out/
 /build
-.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# env / secrets
+.env*.local
 *.pem
+
+# vercel
+.vercel
+
+# convex
+.convex/
+
+# OS
+.DS_Store
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+bun-debug.log*
 
-# local env files
-.env*.local
-.vercel
-*.tsbuildinfo
-next-env.d.ts
-.convex/
+# IDE
+.vscode/settings.json
+.idea/

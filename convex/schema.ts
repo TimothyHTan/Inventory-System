@@ -92,7 +92,8 @@ export default defineSchema({
   })
     .index("by_product", ["productId"])
     .index("by_product_date", ["productId", "date"])
-    .index("by_org", ["organizationId"]),
+    .index("by_org", ["organizationId"])
+    .index("by_org_date", ["organizationId", "date"]),
 
   // ── Stock Requests (KELUAR flow only) ─────────────────────────
 
