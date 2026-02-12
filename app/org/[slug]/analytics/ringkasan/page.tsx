@@ -32,7 +32,7 @@ export default function RingkasanPage() {
   const [dateRange, setDateRange] = useState<DateRange>("30d");
   const { startDate, endDate } = getDateRange(dateRange);
 
-  const { data, isLoading, isRefreshing, lastUpdated, refresh } =
+  const { data, isLoading, isRefreshing, lastUpdated, refresh, error } =
     useAnalyticsQuery(
       api.analytics.getSummary,
       org
@@ -40,6 +40,27 @@ export default function RingkasanPage() {
         : "skip",
       { pollInterval: 5 * 60 * 1000 }
     );
+
+  if (!isLoading && !data) {
+    return (
+      <>
+        <AnalyticsHeader
+          title="Ringkasan Analitik"
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          lastUpdated={lastUpdated}
+          isRefreshing={isRefreshing}
+          onRefresh={refresh}
+        />
+        <EmptyState
+          message="Data analitik belum tersedia"
+          suggestion={
+            error ?? "Periksa koneksi Convex/auth lalu coba refresh halaman."
+          }
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -186,6 +207,7 @@ export default function RingkasanPage() {
                     stroke="#7B9E6B"
                     strokeWidth={2}
                     dot={false}
+                    isAnimationActive={false}
                     activeDot={{ r: 4, strokeWidth: 0 }}
                   />
                   <Line
@@ -194,6 +216,7 @@ export default function RingkasanPage() {
                     stroke="#C75C5C"
                     strokeWidth={2}
                     dot={false}
+                    isAnimationActive={false}
                     activeDot={{ r: 4, strokeWidth: 0 }}
                   />
                 </LineChart>
@@ -270,16 +293,9 @@ export default function RingkasanPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.topProducts.map((p, i) => (
-                  <motion.tr
+                {data.topProducts.map((p) => (
+                  <tr
                     key={p.name}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{
-                      delay: i * 0.04,
-                      duration: 0.25,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
                     className="border-b border-carbon-700/30 last:border-0"
                   >
                     <td className="px-5 py-3 text-sm text-carbon-100">
@@ -297,7 +313,7 @@ export default function RingkasanPage() {
                     <td className="px-5 py-3 mono-num text-sm text-copper font-medium text-right">
                       {formatNumber(p.currentStock)}
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))}
               </tbody>
             </table>
