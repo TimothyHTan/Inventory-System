@@ -56,17 +56,15 @@ export const get = query({
     if (!userId) return null;
 
     const product = await ctx.db.get(id);
-    if (!product) return null;
+    if (!product || !product.organizationId) return null;
 
     // Verify user has access to this product's org
-    if (product.organizationId) {
-      const membership = await getOrgMembership(
-        ctx,
-        userId,
-        product.organizationId
-      );
-      if (!membership) return null;
-    }
+    const membership = await getOrgMembership(
+      ctx,
+      userId,
+      product.organizationId
+    );
+    if (!membership) return null;
 
     return product;
   },
@@ -126,11 +124,10 @@ export const update = mutation({
     if (!userId) throw new Error("Tidak terautentikasi");
 
     const product = await ctx.db.get(id);
-    if (!product) throw new Error("Produk tidak ditemukan");
+    if (!product || !product.organizationId)
+      throw new Error("Produk tidak ditemukan");
 
-    if (product.organizationId) {
-      await requireMinRole(ctx, userId, product.organizationId, "logistic");
-    }
+    await requireMinRole(ctx, userId, product.organizationId, "logistic");
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
     if (name !== undefined) updates.name = name;
@@ -147,11 +144,10 @@ export const remove = mutation({
     if (!userId) throw new Error("Tidak terautentikasi");
 
     const product = await ctx.db.get(id);
-    if (!product) throw new Error("Produk tidak ditemukan");
+    if (!product || !product.organizationId)
+      throw new Error("Produk tidak ditemukan");
 
-    if (product.organizationId) {
-      await requireMinRole(ctx, userId, product.organizationId, "owner");
-    }
+    await requireMinRole(ctx, userId, product.organizationId, "owner");
 
     // Remove all transactions for this product
     const transactions = await ctx.db
@@ -176,11 +172,9 @@ export const bulkRemove = mutation({
 
     for (const id of ids) {
       const product = await ctx.db.get(id);
-      if (!product) continue;
+      if (!product || !product.organizationId) continue;
 
-      if (product.organizationId) {
-        await requireMinRole(ctx, userId, product.organizationId, "owner");
-      }
+      await requireMinRole(ctx, userId, product.organizationId, "owner");
 
       // Remove all transactions for this product
       const transactions = await ctx.db

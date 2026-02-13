@@ -3,28 +3,24 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { scrypt as scryptCallback, randomBytes } from "node:crypto";
 import nodemailer from "nodemailer";
+import { scrypt } from "lucia/dist/scrypt/index.js";
+import { encodeHexLowerCase } from "@oslojs/encoding";
 
 // ---------------------------------------------------------------------------
-// Password hashing — matches @convex-dev/auth's Scrypt implementation (lucia)
+// Password hashing — uses same pure JS scrypt as auth.ts (N=8192)
 // Format: "{hex_salt}:{hex_key}" where salt=16 bytes, key=64 bytes
 // ---------------------------------------------------------------------------
 
-function hashPassword(password: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const salt = randomBytes(16).toString("hex");
-    scryptCallback(
-      password.normalize("NFKC"),
-      salt,
-      64,
-      { N: 16384, r: 16, p: 1 },
-      (err, key) => {
-        if (err) reject(err);
-        else resolve(`${salt}:${key.toString("hex")}`);
-      }
-    );
-  });
+async function hashPassword(password: string): Promise<string> {
+  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+  const salt = encodeHexLowerCase(saltBytes);
+  const encoded = new TextEncoder().encode(password.normalize("NFKC"));
+  const encodedSalt = new TextEncoder().encode(salt);
+  const key = new Uint8Array(
+    await scrypt(encoded, encodedSalt, { N: 8192, r: 16, p: 1, dkLen: 64 }),
+  );
+  return `${salt}:${encodeHexLowerCase(key)}`;
 }
 
 // ---------------------------------------------------------------------------

@@ -57,7 +57,10 @@ export default defineSchema({
     .index("by_code", ["code"])
     .index("by_org", ["organizationId"]),
 
-  // ── Existing tables (with optional organizationId for migration) ──
+  // ── Core data tables (org-scoped) ─────────────────────────────
+  // organizationId is optional in schema for backward compatibility with
+  // pre-migration data, but all mutations always set it and all queries
+  // always enforce org membership — so data without an org is inaccessible.
 
   products: defineTable({
     name: v.string(),

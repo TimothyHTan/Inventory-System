@@ -18,15 +18,14 @@ export const list = query({
     if (!userId) return [];
 
     const product = await ctx.db.get(productId);
-    if (!product) return [];
-    if (product.organizationId) {
-      const membership = await getOrgMembership(
-        ctx,
-        userId,
-        product.organizationId
-      );
-      if (!membership) return [];
-    }
+    if (!product || !product.organizationId) return [];
+
+    const membership = await getOrgMembership(
+      ctx,
+      userId,
+      product.organizationId
+    );
+    if (!membership) return [];
 
     let transactions;
 
@@ -110,7 +109,8 @@ export const add = mutation({
     if (quantity <= 0) throw new Error("Jumlah harus positif");
 
     const product = await ctx.db.get(productId);
-    if (!product) throw new Error("Produk tidak ditemukan");
+    if (!product || !product.organizationId)
+      throw new Error("Produk tidak ditemukan");
 
     // KELUAR transactions can only be created via request fulfillment
     if (type === "out" && _internal_source !== "request") {
@@ -120,9 +120,7 @@ export const add = mutation({
     }
 
     // Require logistic+ for direct MASUK
-    if (product.organizationId) {
-      await requireMinRole(ctx, userId, product.organizationId, "logistic");
-    }
+    await requireMinRole(ctx, userId, product.organizationId, "logistic");
 
     // Prevent negative inventory
     if (type === "out" && quantity > product.currentStock) {
@@ -167,26 +165,25 @@ export const remove = mutation({
     if (!userId) throw new Error("Tidak terautentikasi");
 
     const tx = await ctx.db.get(id);
-    if (!tx) throw new Error("Transaksi tidak ditemukan");
+    if (!tx || !tx.organizationId)
+      throw new Error("Transaksi tidak ditemukan");
 
-    if (tx.organizationId) {
-      const membership = await requireMinRole(
-        ctx,
-        userId,
-        tx.organizationId,
-        "logistic"
-      );
+    const membership = await requireMinRole(
+      ctx,
+      userId,
+      tx.organizationId,
+      "logistic"
+    );
 
-      // Tiered delete: logistic can only delete within 60 minutes
-      if (membership.role === "logistic") {
-        if (!isWithinDeleteWindow(tx.createdAt)) {
-          throw new Error(
-            "Transaksi ini sudah lebih dari 60 menit dan tidak dapat dihapus oleh Staf Logistik."
-          );
-        }
+    // Tiered delete: logistic can only delete within 60 minutes
+    if (membership.role === "logistic") {
+      if (!isWithinDeleteWindow(tx.createdAt)) {
+        throw new Error(
+          "Transaksi ini sudah lebih dari 60 menit dan tidak dapat dihapus oleh Staf Logistik."
+        );
       }
-      // manager, owner, admin — always allowed (already passed requireMinRole)
     }
+    // manager, owner, admin — always allowed (already passed requireMinRole)
 
     // Reverse the stock change
     const product = await ctx.db.get(tx.productId);
@@ -217,22 +214,20 @@ export const bulkRemove = mutation({
 
     for (const id of ids) {
       const tx = await ctx.db.get(id);
-      if (!tx) continue;
+      if (!tx || !tx.organizationId) continue;
 
-      if (tx.organizationId) {
-        const membership = await requireMinRole(
-          ctx,
-          userId,
-          tx.organizationId,
-          "logistic"
-        );
+      const membership = await requireMinRole(
+        ctx,
+        userId,
+        tx.organizationId,
+        "logistic"
+      );
 
-        // Logistic: skip transactions outside the 60-min window
-        if (membership.role === "logistic") {
-          if (!isWithinDeleteWindow(tx.createdAt)) {
-            skipped++;
-            continue;
-          }
+      // Logistic: skip transactions outside the 60-min window
+      if (membership.role === "logistic") {
+        if (!isWithinDeleteWindow(tx.createdAt)) {
+          skipped++;
+          continue;
         }
       }
 
