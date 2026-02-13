@@ -15,6 +15,8 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     // Legacy global role — org-scoped roles are in organizationMembers
     role: v.optional(v.union(v.literal("admin"), v.literal("staff"))),
+    // Pending display name change (awaiting manager+ approval)
+    pendingName: v.optional(v.string()),
   }),
 
   // ── Multi-tenancy tables ──────────────────────────────────────
@@ -114,6 +116,8 @@ export default defineSchema({
     fulfilledBy: v.optional(v.id("users")),
     fulfilledAt: v.optional(v.number()),
     transactionId: v.optional(v.id("transactions")),
+    cancelledBy: v.optional(v.id("users")),
+    cancelledAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_org", ["organizationId"])

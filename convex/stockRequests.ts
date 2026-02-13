@@ -1,7 +1,8 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { getOrgMembership, requireMinRole, ROLE_TIER } from "./helpers";
+import { getOrgMembership, requireMinRole, ROLE_TIER, displayName } from "./helpers";
 
 // ── Queries ──────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ export const list = query({
       requests = requests.filter((r) => r.requestedBy === userId);
     }
 
-    // Enrich with product name and requester name
+    // Enrich with product name, requester name, fulfiller/canceller name
     const enriched = await Promise.all(
       requests.map(async (r) => {
         const product = await ctx.db.get(r.productId);
@@ -57,13 +58,15 @@ export const list = query({
         const fulfiller = r.fulfilledBy
           ? await ctx.db.get(r.fulfilledBy)
           : null;
+        const canceller = r.cancelledBy
+          ? await ctx.db.get(r.cancelledBy)
+          : null;
         return {
           ...r,
           productName: product?.name ?? "—",
-          requesterName: requester?.name || requester?.email || "—",
-          fulfillerName: fulfiller
-            ? fulfiller.name || fulfiller.email || "—"
-            : null,
+          requesterName: displayName(requester),
+          fulfillerName: fulfiller ? displayName(fulfiller) : null,
+          cancellerName: canceller ? displayName(canceller) : null,
         };
       })
     );
@@ -189,7 +192,11 @@ export const cancel = mutation({
       await requireMinRole(ctx, userId, request.organizationId, "logistic");
     }
 
-    await ctx.db.patch(requestId, { status: "cancelled" });
+    await ctx.db.patch(requestId, {
+      status: "cancelled",
+      cancelledBy: userId,
+      cancelledAt: Date.now(),
+    });
   },
 });
 
@@ -248,5 +255,158 @@ export const fulfill = mutation({
     });
 
     return { txId, newBalance };
+  },
+});
+
+// ── Internal Mutations (called by cron, not exposed to client) ───
+
+/** Delete fulfilled/cancelled stock requests older than 30 days */
+export const cleanupOldRequests = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+    const fulfilled = await ctx.db
+      .query("stockRequests")
+      .filter((q) => q.eq(q.field("status"), "fulfilled"))
+      .collect();
+
+    const cancelled = await ctx.db
+      .query("stockRequests")
+      .filter((q) => q.eq(q.field("status"), "cancelled"))
+      .collect();
+
+    let deleted = 0;
+
+    for (const request of [...fulfilled, ...cancelled]) {
+      if (request.createdAt < thirtyDaysAgo) {
+        await ctx.db.delete(request._id);
+        deleted++;
+      }
+    }
+
+    return { deleted };
+  },
+});
+
+// ── Activity Feed Query ──────────────────────────────────────────
+
+/** Recent activity feed for the dashboard. All org members can view. */
+export const recentActivity = query({
+  args: {
+    organizationId: v.id("organizations"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { organizationId, limit }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const membership = await getOrgMembership(ctx, userId, organizationId);
+    if (!membership) return [];
+
+    const maxItems = limit ?? 15;
+
+    // Get recent stock requests (all statuses)
+    const requests = await ctx.db
+      .query("stockRequests")
+      .withIndex("by_org", (q) => q.eq("organizationId", organizationId))
+      .order("desc")
+      .take(50);
+
+    // Get recent MASUK transactions
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_org", (q) => q.eq("organizationId", organizationId))
+      .order("desc")
+      .take(50);
+
+    const inboundTx = transactions.filter((tx) => tx.type === "in");
+
+    // Build a user cache to avoid repeated lookups
+    const userIds = new Set<string>();
+    for (const r of requests) {
+      userIds.add(r.requestedBy);
+      if (r.fulfilledBy) userIds.add(r.fulfilledBy);
+      if (r.cancelledBy) userIds.add(r.cancelledBy);
+    }
+    for (const tx of inboundTx) {
+      if (tx.createdBy) userIds.add(tx.createdBy);
+    }
+
+    const userCache = new Map<string, { name?: string; email?: string }>();
+    for (const id of userIds) {
+      const user = await ctx.db.get(id as Id<"users">);
+      if (user) userCache.set(id, { name: user.name, email: user.email });
+    }
+
+    const getUserName = (id: string | undefined) => {
+      if (!id) return "—";
+      const u = userCache.get(id);
+      return displayName(u ?? null);
+    };
+
+    const activities: Array<{
+      type: "request_created" | "request_fulfilled" | "request_cancelled" | "masuk_recorded";
+      timestamp: number;
+      userName: string;
+      productName: string;
+      quantity: number;
+      note?: string;
+    }> = [];
+
+    // Process stock requests into activity events
+    for (const r of requests) {
+      const product = await ctx.db.get(r.productId);
+      const productName = product?.name ?? "—";
+
+      // "Created" event
+      activities.push({
+        type: "request_created",
+        timestamp: r.createdAt,
+        userName: getUserName(r.requestedBy),
+        productName,
+        quantity: r.quantity,
+        note: r.note,
+      });
+
+      // "Fulfilled" event
+      if (r.status === "fulfilled" && r.fulfilledBy && r.fulfilledAt) {
+        activities.push({
+          type: "request_fulfilled",
+          timestamp: r.fulfilledAt,
+          userName: getUserName(r.fulfilledBy),
+          productName,
+          quantity: r.quantity,
+        });
+      }
+
+      // "Cancelled" event
+      if (r.status === "cancelled" && r.cancelledBy && r.cancelledAt) {
+        activities.push({
+          type: "request_cancelled",
+          timestamp: r.cancelledAt,
+          userName: getUserName(r.cancelledBy),
+          productName,
+          quantity: r.quantity,
+        });
+      }
+    }
+
+    // Process MASUK transactions
+    for (const tx of inboundTx) {
+      const product = await ctx.db.get(tx.productId);
+      activities.push({
+        type: "masuk_recorded",
+        timestamp: tx.createdAt,
+        userName: getUserName(tx.createdBy),
+        productName: product?.name ?? "—",
+        quantity: tx.quantity,
+        note: tx.description,
+      });
+    }
+
+    // Sort by timestamp desc, take top N
+    activities.sort((a, b) => b.timestamp - a.timestamp);
+    return activities.slice(0, maxItems);
   },
 });

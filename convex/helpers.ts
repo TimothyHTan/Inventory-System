@@ -61,6 +61,14 @@ export async function requireOrgRole(
   return membership;
 }
 
+/** Get display name: prefer name, fall back to email username (before @) */
+export function displayName(user: { name?: string; email?: string } | null): string {
+  if (!user) return "—";
+  if (user.name) return user.name;
+  if (user.email) return user.email.split("@")[0];
+  return "—";
+}
+
 /** Generate a URL-safe slug from a name */
 export function generateSlug(name: string): string {
   return name

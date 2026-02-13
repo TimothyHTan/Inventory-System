@@ -45,12 +45,18 @@ export default function OrgSettingsPage() {
     api.organizations.getInvites,
     org && isOwner ? { organizationId: org._id } : "skip"
   );
+  const pendingNames = useQuery(
+    api.users.pendingNameChanges,
+    org && isManager ? { organizationId: org._id } : "skip"
+  );
 
   const updateOrg = useMutation(api.organizations.update);
   const updateMemberRole = useMutation(api.organizations.updateMemberRole);
   const removeMember = useMutation(api.organizations.removeMember);
   const createInvite = useMutation(api.organizations.createInvite);
   const revokeInvite = useMutation(api.organizations.revokeInvite);
+  const approveNameChange = useMutation(api.users.approveNameChange);
+  const rejectNameChange = useMutation(api.users.rejectNameChange);
   const removeOrg = useMutation(api.organizations.remove);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -491,6 +497,78 @@ export default function OrgSettingsPage() {
             </tbody>
           </table>
         </section>
+
+        {/* ── Pending Name Changes (manager+ only) ────────── */}
+        {isManager && pendingNames && pendingNames.length > 0 && (
+          <section className="card p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-medium text-carbon-50 uppercase tracking-wider">
+                Permintaan Ubah Nama
+              </h2>
+              <Badge variant="copper">{pendingNames.length}</Badge>
+            </div>
+            <div className="space-y-3">
+              <AnimatePresence mode="popLayout">
+                {pendingNames.map((p) => (
+                  <motion.div
+                    key={p.userId}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: 40, scale: 0.95, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } }}
+                    className="flex items-center justify-between gap-3 py-3 px-3 rounded-sm border border-carbon-600/30 bg-carbon-800/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-carbon-100">
+                        {p.currentName}
+                        <span className="text-carbon-500 mx-2">&rarr;</span>
+                        <span className="text-copper font-medium">{p.pendingName}</span>
+                      </div>
+                      <p className="text-[10px] text-carbon-500 font-mono mt-0.5">
+                        {p.email}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={async () => {
+                          try {
+                            await rejectNameChange({
+                              userId: p.userId as Id<"users">,
+                              organizationId: org!._id,
+                            });
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Gagal menolak");
+                          }
+                        }}
+                      >
+                        Tolak
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await approveNameChange({
+                              userId: p.userId as Id<"users">,
+                              organizationId: org!._id,
+                            });
+                            setSuccess("Nama berhasil diubah");
+                            setTimeout(() => setSuccess(""), 3000);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Gagal menyetujui");
+                          }
+                        }}
+                      >
+                        Setujui
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </section>
+        )}
 
         {/* ── Invites (owner+ only) ─────────────────────────── */}
         {isOwner && (

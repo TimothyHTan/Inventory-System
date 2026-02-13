@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useOrganization, ROLE_LABELS } from "@/components/OrganizationProvider";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { PageTransition } from "@/components/motion/PageTransition";
+import { motion, AnimatePresence } from "motion/react";
 
 const roleBadgeVariant: Record<string, "copper" | "sage" | "rust" | "muted"> = {
   employee: "muted",
@@ -20,6 +23,15 @@ export default function AccountPage() {
   const { org, membership, isLoading: orgLoading } = useOrganization();
   const [darkMode, setDarkMode] = useState(true);
 
+  // Name change state
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [nameLoading, setNameLoading] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const [nameSuccess, setNameSuccess] = useState("");
+
+  const requestNameChange = useMutation(api.users.requestNameChange);
+
   if (orgLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -27,6 +39,34 @@ export default function AccountPage() {
       </div>
     );
   }
+
+  const hasName = !!user?.name;
+
+  const handleNameRequest = async () => {
+    if (!newName.trim()) return;
+    setNameError("");
+    setNameLoading(true);
+    try {
+      const result = await requestNameChange({
+        organizationId: org?._id,
+        newName: newName.trim(),
+      });
+      if (result?.direct) {
+        setNameSuccess("Nama berhasil diubah");
+      } else {
+        setNameSuccess("Permintaan terkirim — menunggu persetujuan manager");
+      }
+      setEditingName(false);
+      setNewName("");
+      setTimeout(() => setNameSuccess(""), 3000);
+    } catch (err) {
+      setNameError(
+        err instanceof Error ? err.message : "Gagal mengirim permintaan"
+      );
+    } finally {
+      setNameLoading(false);
+    }
+  };
 
   return (
     <PageTransition>
@@ -42,12 +82,108 @@ export default function AccountPage() {
             PROFIL
           </div>
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-carbon-400">Nama</span>
-              <span className="text-sm text-carbon-100">
-                {user?.name || "—"}
-              </span>
+            {/* Name row */}
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-carbon-400">Nama</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-carbon-100">
+                    {user?.name || "—"}
+                  </span>
+                  {!editingName && !user?.pendingName && (
+                    <button
+                      onClick={() => {
+                        setNewName(user?.name || "");
+                        setEditingName(true);
+                        setNameError("");
+                      }}
+                      className="text-[10px] text-copper hover:text-copper/80 transition-colors"
+                    >
+                      {hasName ? "Ubah" : "Atur Nama"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Pending name indicator */}
+              <AnimatePresence>
+                {user?.pendingName && !editingName && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-2 flex items-center gap-2"
+                  >
+                    <Badge variant="copper">Menunggu</Badge>
+                    <span className="text-xs text-copper">
+                      Perubahan ke &ldquo;{user.pendingName}&rdquo; menunggu persetujuan
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Success message */}
+              <AnimatePresence>
+                {nameSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-2"
+                  >
+                    <span className="text-xs text-sage">{nameSuccess}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Edit name form */}
+              <AnimatePresence>
+                {editingName && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-3 space-y-2"
+                  >
+                    <Input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="Nama baru"
+                      autoFocus
+                    />
+                    {nameError && (
+                      <p className="text-xs text-rust">{nameError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        loading={nameLoading}
+                        onClick={handleNameRequest}
+                        disabled={!newName.trim()}
+                      >
+                        {hasName ? "Kirim Permintaan" : "Simpan"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingName(false);
+                          setNameError("");
+                        }}
+                      >
+                        Batal
+                      </Button>
+                    </div>
+                    {hasName && (
+                      <p className="text-[10px] text-carbon-500">
+                        Perubahan nama memerlukan persetujuan manager atau pemilik organisasi.
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+
             <div className="h-px bg-carbon-700/40" />
             <div className="flex items-center justify-between">
               <span className="text-xs text-carbon-400">Email</span>
@@ -109,7 +245,6 @@ export default function AccountPage() {
             SEGERA HADIR
           </div>
           <div className="space-y-2 text-xs text-carbon-500">
-            <p>Ubah nama tampilan</p>
             <p>Ubah kata sandi</p>
             <p>Notifikasi</p>
           </div>

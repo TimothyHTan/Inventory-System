@@ -11,7 +11,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Badge } from "@/components/ui/Badge";
 import { LogisticNotificationBoard } from "@/components/LogisticNotificationBoard";
+import { timeAgo, formatNumber } from "@/lib/utils";
 import Link from "next/link";
 
 export default function OrgDashboardPage() {
@@ -211,6 +213,9 @@ export default function OrgDashboardPage() {
         {/* Logistic notification board */}
         {org && <LogisticNotificationBoard />}
 
+        {/* Activity Feed */}
+        {org && <ActivityFeed organizationId={org._id} />}
+
         {/* Migration banner for owner+ */}
         {isOwner && org && <MigrationBanner organizationId={org._id} />}
 
@@ -366,5 +371,89 @@ function MigrationBanner({
         Migrasi
       </Button>
     </motion.div>
+  );
+}
+
+const activityLabels: Record<
+  string,
+  { text: string; variant: "sage" | "rust" | "copper" | "muted" }
+> = {
+  request_created: { text: "Permintaan", variant: "copper" },
+  request_fulfilled: { text: "Pemenuhan", variant: "sage" },
+  request_cancelled: { text: "Pembatalan", variant: "muted" },
+  masuk_recorded: { text: "Barang Masuk", variant: "sage" },
+};
+
+function ActivityFeed({
+  organizationId,
+}: {
+  organizationId: Id<"organizations">;
+}) {
+  const activities = useQuery(api.stockRequests.recentActivity, {
+    organizationId,
+    limit: 10,
+  });
+
+  if (activities === undefined) {
+    return (
+      <div className="mt-8">
+        <div className="stencil mb-3" style={{ fontSize: "10px" }}>
+          AKTIVITAS TERBARU
+        </div>
+        <div className="card p-4 animate-pulse space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-6 bg-carbon-700/50 rounded" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (activities.length === 0) return null;
+
+  return (
+    <div className="mt-8">
+      <div className="stencil mb-3" style={{ fontSize: "10px" }}>
+        AKTIVITAS TERBARU
+      </div>
+      <div className="card overflow-hidden">
+        <div className="divide-y divide-carbon-700/30">
+          {activities.map((a, i) => {
+            const label = activityLabels[a.type];
+            return (
+              <motion.div
+                key={`${a.type}-${a.timestamp}-${i}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.2,
+                  delay: i * 0.03,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+                className="px-4 py-3 flex items-center justify-between gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-sm text-carbon-100 font-medium">
+                      {a.userName}
+                    </span>
+                    <Badge variant={label.variant}>{label.text}</Badge>
+                  </div>
+                  <div className="text-xs text-carbon-400 truncate">
+                    {a.productName}
+                    <span className="mono-num ml-2">
+                      {formatNumber(a.quantity)} unit
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs text-carbon-500 flex-shrink-0">
+                  {timeAgo(a.timestamp)}
+                </span>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }

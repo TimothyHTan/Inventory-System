@@ -6,6 +6,7 @@ import {
   requireMinRole,
   ROLE_TIER,
   isWithinDeleteWindow,
+  displayName,
 } from "./helpers";
 
 export const list = query({
@@ -78,7 +79,7 @@ export const listInbound = query({
         return {
           ...tx,
           productName: product?.name ?? "—",
-          creatorName: creator?.name || creator?.email || "—",
+          creatorName: displayName(creator),
         };
       })
     );

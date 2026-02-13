@@ -19,6 +19,12 @@ async function scryptKey(
 export const { auth, signIn, signOut, store } = convexAuth({
   providers: [
     Password({
+      profile(params) {
+        return {
+          email: params.email as string,
+          ...(params.name ? { name: params.name as string } : {}),
+        };
+      },
       crypto: {
         async hashSecret(password: string) {
           const salt = encodeHexLowerCase(

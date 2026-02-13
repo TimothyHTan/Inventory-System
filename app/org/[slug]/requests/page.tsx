@@ -145,6 +145,10 @@ function EmployeeRequestList({
         note?: string;
         status: string;
         createdAt: number;
+        fulfillerName?: string | null;
+        fulfilledAt?: number;
+        cancellerName?: string | null;
+        cancelledAt?: number;
       }>
     | undefined;
   status: StatusTab;
@@ -192,6 +196,18 @@ function EmployeeRequestList({
                   {r.note && <span className="truncate">{r.note}</span>}
                   <span>{timeAgo(r.createdAt)}</span>
                 </div>
+                {r.status === "fulfilled" && r.fulfillerName && (
+                  <div className="text-xs text-sage/70 mt-1">
+                    Dipenuhi oleh {r.fulfillerName}
+                    {r.fulfilledAt && ` · ${timeAgo(r.fulfilledAt)}`}
+                  </div>
+                )}
+                {r.status === "cancelled" && r.cancellerName && (
+                  <div className="text-xs text-carbon-500 mt-1">
+                    Dibatalkan oleh {r.cancellerName}
+                    {r.cancelledAt && ` · ${timeAgo(r.cancelledAt)}`}
+                  </div>
+                )}
               </div>
               {r.status === "pending" && (
                 <Button
@@ -245,10 +261,14 @@ function LogisticRequestList({
         _id: Id<"stockRequests">;
         productName: string;
         requesterName: string;
+        fulfillerName?: string | null;
+        cancellerName?: string | null;
         quantity: number;
         note?: string;
         status: string;
         createdAt: number;
+        fulfilledAt?: number;
+        cancelledAt?: number;
       }>
     | undefined;
   status: StatusTab;
@@ -304,6 +324,18 @@ function LogisticRequestList({
                   {r.note && <span className="truncate">{r.note}</span>}
                   <span>{timeAgo(r.createdAt)}</span>
                 </div>
+                {r.status === "fulfilled" && r.fulfillerName && (
+                  <div className="text-xs text-sage/70 mt-1">
+                    Dipenuhi oleh {r.fulfillerName}
+                    {r.fulfilledAt && ` · ${timeAgo(r.fulfilledAt)}`}
+                  </div>
+                )}
+                {r.status === "cancelled" && r.cancellerName && (
+                  <div className="text-xs text-carbon-500 mt-1">
+                    Dibatalkan oleh {r.cancellerName}
+                    {r.cancelledAt && ` · ${timeAgo(r.cancelledAt)}`}
+                  </div>
+                )}
               </div>
               {r.status === "pending" && (
                 <div className="flex items-center gap-2 flex-shrink-0">
