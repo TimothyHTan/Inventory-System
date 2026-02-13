@@ -10,4 +10,11 @@ crons.daily(
   internal.stockRequests.cleanupOldRequests
 );
 
+// Generate monthly Excel reports on the 1st at 01:00 UTC (08:00 WIB)
+crons.monthly(
+  "generate-monthly-reports",
+  { day: 1, hourUTC: 1, minuteUTC: 0 },
+  internal.reportActions.generateAllMonthlyReports
+);
+
 export default crons;

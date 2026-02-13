@@ -43,6 +43,7 @@ export function Navbar() {
   const inboundHref = orgSlug ? `/org/${orgSlug}/inbound` : "#";
   const accountHref = orgSlug ? `/org/${orgSlug}/account` : "#";
   const analyticsHref = orgSlug ? `/org/${orgSlug}/analytics/ringkasan` : "#";
+  const dataHref = orgSlug ? `/org/${orgSlug}/data` : "#";
   const isOnAnalytics = pathname.includes("/analytics");
 
   // Pending request count for notification badge (logistic+ only)
@@ -90,6 +91,14 @@ export function Navbar() {
                 onToggle={setAnalyticsOpen}
                 pathname={pathname}
               />
+            )}
+            {isManager && (
+              <NavLink
+                href={dataHref}
+                active={pathname.endsWith("/data")}
+              >
+                Laporan
+              </NavLink>
             )}
             <NavLink
               href={requestsHref}
@@ -192,6 +201,15 @@ export function Navbar() {
                 pathname={pathname}
                 onNavigate={() => setMobileMenuOpen(false)}
               />
+            )}
+            {isManager && (
+              <MobileNavLink
+                href={dataHref}
+                active={pathname.endsWith("/data")}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Laporan
+              </MobileNavLink>
             )}
             <MobileNavLink
               href={requestsHref}

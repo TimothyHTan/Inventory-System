@@ -75,6 +75,7 @@ const OrgContext = createContext<OrgContextType>({
 function getMinTierForPath(pathname: string): number {
   if (pathname.includes("/settings")) return ROLE_TIER["manager"];
   if (pathname.includes("/analytics")) return ROLE_TIER["manager"];
+  if (pathname.includes("/data")) return ROLE_TIER["manager"];
   if (pathname.includes("/inbound")) return ROLE_TIER["logistic"];
   // dashboard, requests, products — accessible to all members
   return ROLE_TIER["employee"];

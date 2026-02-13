@@ -18,6 +18,8 @@ import type * as organizations from "../organizations.js";
 import type * as passwordReset from "../passwordReset.js";
 import type * as passwordResetActions from "../passwordResetActions.js";
 import type * as products from "../products.js";
+import type * as reportActions from "../reportActions.js";
+import type * as reports from "../reports.js";
 import type * as stockRequests from "../stockRequests.js";
 import type * as transactions from "../transactions.js";
 import type * as users from "../users.js";
@@ -39,6 +41,8 @@ declare const fullApi: ApiFromModules<{
   passwordReset: typeof passwordReset;
   passwordResetActions: typeof passwordResetActions;
   products: typeof products;
+  reportActions: typeof reportActions;
+  reports: typeof reports;
   stockRequests: typeof stockRequests;
   transactions: typeof transactions;
   users: typeof users;

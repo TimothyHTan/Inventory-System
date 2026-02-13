@@ -134,4 +134,29 @@ export default defineSchema({
     attempts: v.number(),
     createdAt: v.number(),
   }).index("by_email", ["email"]),
+
+  // ── Monthly Excel reports (stored on Cloudflare R2) ─────────────
+
+  reports: defineTable({
+    organizationId: v.id("organizations"),
+    month: v.string(), // "2026-01" format
+    status: v.union(
+      v.literal("generating"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    fileKey: v.optional(v.string()), // R2 object key
+    fileUrl: v.optional(v.string()), // public download URL
+    fileSize: v.optional(v.number()),
+    productCount: v.optional(v.number()),
+    transactionCount: v.optional(v.number()),
+    productId: v.optional(v.id("products")), // if set, single-product report
+    productName: v.optional(v.string()), // snapshot of product name at generation
+    generatedBy: v.optional(v.id("users")), // null = cron-triggered
+    generatedAt: v.optional(v.number()), // when generation completed/failed
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_org", ["organizationId"])
+    .index("by_org_month", ["organizationId", "month"]),
 });
